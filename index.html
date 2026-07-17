@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<meta name="theme-color" content="#0e1420"/>
+<title>MedCalc Drill — BN Medication Calculations</title>
+<style>
+:root{
+  --bg:#0e1420; --bg2:#141c2b; --card:#182133; --card2:#1e2941;
+  --line:#27324a; --line2:#33405c;
+  --tx:#e8eef7; --tx2:#9fb0c8; --tx3:#6d7f9c;
+  --acc:#2fd0b5; --acc2:#1ba38d;
+  --good:#39d98a; --hard:#ffce54; --miss:#ff6b6b;
+  --gGood:#123a2a; --gHard:#3a3413; --gMiss:#3a1a1a;
+  --shadow:0 10px 40px rgba(0,0,0,.45);
+  --r:16px; --maxw:760px;
+}
+html[data-theme="light"]{
+  --bg:#eef2f8; --bg2:#e3e9f3; --card:#ffffff; --card2:#f4f7fc;
+  --line:#dbe3ef; --line2:#c7d3e6;
+  --tx:#16202f; --tx2:#4a5a72; --tx3:#7d8ca5;
+  --acc:#0e9d87; --acc2:#0b7d6c;
+  --good:#128a55; --hard:#a9791a; --miss:#c53b3b;
+  --gGood:#dcf7ea; --gHard:#faf0d2; --gMiss:#fbe0e0;
+  --shadow:0 8px 30px rgba(30,50,90,.14);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+html,body{margin:0;height:100%;overscroll-behavior-y:none}
+body{
+  background:linear-gradient(180deg,var(--bg),var(--bg2));
+  color:var(--tx); font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased; min-height:100%;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:14px 16px 120px}
+button{font-family:inherit;cursor:pointer;border:none;color:inherit;background:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.hidden{display:none !important}
+b{font-variant-numeric:tabular-nums}
+
+/* Header */
+header{display:flex;align-items:center;gap:10px;margin:6px 0 12px;flex-wrap:wrap}
+.brand{display:flex;flex-direction:column;line-height:1.15;margin-right:auto}
+.brand b{font-size:15px;letter-spacing:.2px}
+.brand span{font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:1.2px}
+.iconbtn{width:38px;height:38px;border-radius:10px;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:17px;color:var(--tx2);transition:.15s}
+.iconbtn:hover{border-color:var(--line2);color:var(--tx)}
+
+/* Nav segments */
+.seg{display:flex;background:var(--card);border:1px solid var(--line);border-radius:11px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg button{padding:7px 12px;border-radius:8px;font-size:12.5px;color:var(--tx2);font-weight:600;white-space:nowrap;transition:.12s}
+.seg button.on{background:var(--acc);color:#04231d}
+.seg button:not(.on):hover{color:var(--tx);background:var(--card2)}
+.controls{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+
+/* Category chips */
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:20px;background:var(--card);border:1px solid var(--line);font-size:12.5px;font-weight:600;color:var(--tx2);transition:.12s}
+.chip:hover{border-color:var(--line2);color:var(--tx)}
+.chip.on{background:var(--acc);border-color:var(--acc);color:#04231d}
+.chip .mdot{width:8px;height:8px;border-radius:50%;background:var(--line2)}
+.chip.on .mdot{background:rgba(0,0,0,.35)}
+.mdot.m3{background:var(--good)} .mdot.m2{background:var(--hard)} .mdot.m1{background:var(--miss)}
+
+/* Card / stage */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:22px 22px 20px;position:relative;animation:pop .28s cubic-bezier(.2,.9,.3,1.2)}
+@keyframes pop{from{opacity:0;transform:translateY(10px) scale(.99)}to{opacity:1;transform:none}}
+.cmeta{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.tag{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:3px 8px;border-radius:6px;background:var(--card2);border:1px solid var(--line2);color:var(--tx2)}
+.tag.acc{background:rgba(47,208,181,.13);color:var(--acc);border-color:rgba(47,208,181,.3)}
+.tag.right{margin-left:auto;color:var(--tx3);border-color:var(--line)}
+.q{font-size:19px;font-weight:600;line-height:1.5;letter-spacing:-.2px;margin:2px 0 4px}
+.q .roundnote{display:block;margin-top:8px;font-size:13px;color:var(--tx3);font-style:italic;font-weight:500}
+
+/* Answer input */
+.ansrow{display:flex;gap:9px;margin-top:18px;align-items:stretch;flex-wrap:wrap}
+.ansbox{flex:1;min-width:170px;display:flex;align-items:center;background:var(--card2);border:1.5px solid var(--line2);border-radius:12px;padding:0 14px;transition:.15s}
+.ansbox:focus-within{border-color:var(--acc)}
+.ansbox input{flex:1;min-width:60px;background:none;border:none;outline:none;color:var(--tx);font:600 20px/1 inherit;padding:13px 0;font-variant-numeric:tabular-nums}
+.ansbox .unit{font-size:13px;font-weight:700;color:var(--tx3);white-space:nowrap;margin-left:8px}
+.btn{padding:13px 22px;border-radius:12px;font-size:15px;font-weight:800;letter-spacing:.3px;transition:.12s}
+.btn.primary{background:var(--acc);color:#04231d}
+.btn.primary:hover{background:var(--acc2);color:#eafffb}
+.btn.ghost{background:var(--card2);border:1px solid var(--line2);color:var(--tx2)}
+.btn.ghost:hover{color:var(--tx);border-color:var(--acc)}
+.btn:disabled{opacity:.45;cursor:default}
+
+/* Feedback */
+.fb{margin-top:16px;border-radius:12px;padding:13px 15px;font-size:14.5px;line-height:1.5;animation:pop .22s ease}
+.fb.ok{background:var(--gGood);border:1px solid rgba(57,217,138,.4)}
+.fb.ok .h{color:var(--good)}
+.fb.no{background:var(--gMiss);border:1px solid rgba(255,107,107,.4)}
+.fb.no .h{color:var(--miss)}
+.fb.near{background:var(--gHard);border:1px solid rgba(255,206,84,.45)}
+.fb.near .h{color:var(--hard)}
+.fb .h{font-weight:800;font-size:15px;margin-bottom:3px;display:flex;align-items:center;gap:7px}
+.fb .slip{margin-top:8px;padding:9px 11px;border-radius:9px;background:rgba(0,0,0,.18);font-size:13.5px}
+html[data-theme="light"] .fb .slip{background:rgba(255,255,255,.55)}
+.fb .slip b{color:var(--hard)}
+
+/* Worked solution */
+.steps{margin-top:14px;border-top:1px dashed var(--line2);padding-top:14px}
+.steps .lab{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--tx3);margin-bottom:9px}
+.steps ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px;counter-reset:st}
+.steps li{display:flex;gap:10px;align-items:flex-start;background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:14px;line-height:1.5}
+.steps li::before{counter-increment:st;content:counter(st);flex:0 0 auto;width:20px;height:20px;border-radius:50%;background:var(--bg2);border:1px solid var(--line2);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;color:var(--tx2);margin-top:2px}
+.steps li em{font-style:normal;color:var(--acc);font-weight:700}
+.nextrow{display:flex;gap:9px;margin-top:16px}
+.nextrow .btn{flex:1}
+
+/* Streak / drill topbar */
+.drillbar{display:flex;align-items:center;gap:10px;margin-bottom:12px;font-size:13px;color:var(--tx2);flex-wrap:wrap}
+.drillbar .pill{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:20px;background:var(--card);border:1px solid var(--line);font-weight:700}
+.drillbar .pill.hot{border-color:rgba(255,140,60,.5);color:#ffb073}
+
+/* Test setup + run */
+.setup h3{margin:0 0 4px;font-size:18px}
+.setup p{margin:0 0 14px;color:var(--tx2);font-size:13.5px}
+.setrow{display:flex;align-items:center;gap:10px;margin-bottom:11px;flex-wrap:wrap}
+.setrow .lab{flex:0 0 92px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--tx3)}
+.bigstart{width:100%;margin-top:14px;padding:15px;border-radius:12px;color:#04231d;font-size:16px;font-weight:900;letter-spacing:.5px;background:linear-gradient(160deg,var(--acc),var(--acc2));box-shadow:0 8px 24px rgba(47,208,181,.35)}
+.bigstart:hover{filter:brightness(1.08)}
+.testbar{display:flex;align-items:center;gap:10px;margin-bottom:12px;font-size:13.5px;color:var(--tx2);flex-wrap:wrap}
+.testbar b{color:var(--tx)}
+.testbar .timer{margin-left:auto;font-weight:800;font-variant-numeric:tabular-nums}
+.testbar .timer.low{color:var(--miss)}
+.tprog{height:8px;border-radius:6px;background:var(--card2);overflow:hidden;margin-bottom:14px}
+.tprog i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc2));transition:width .3s}
+
+/* Results */
+.result-hero{border-radius:var(--r);padding:26px 20px;text-align:center;margin-bottom:14px;border:1px solid var(--line);animation:pop .3s ease}
+.result-hero.pass{background:linear-gradient(160deg,rgba(57,217,138,.16),rgba(57,217,138,.04));border-color:rgba(57,217,138,.45)}
+.result-hero.fail{background:linear-gradient(160deg,rgba(255,107,107,.16),rgba(255,107,107,.04));border-color:rgba(255,107,107,.45)}
+.result-hero .big{font-size:40px;font-weight:900;letter-spacing:-1px}
+.result-hero.pass .big{color:var(--good)} .result-hero.fail .big{color:var(--miss)}
+.result-hero .sub{font-size:14px;color:var(--tx2);margin-top:4px}
+.rev{background:var(--card);border:1px solid var(--line);border-radius:12px;margin-bottom:9px;overflow:hidden}
+.rev .rhead{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;cursor:pointer;font-size:14px;line-height:1.45}
+.rev .rhead .ic{flex:0 0 auto;font-size:15px;margin-top:1px}
+.rev .rhead .qq{flex:1;color:var(--tx2)}
+.rev .rhead .ans{flex:0 0 auto;font-weight:700;font-size:13px;text-align:right;color:var(--tx3)}
+.rev .rhead .ans b{display:block;font-size:14px}
+.rev .rhead .ans b.ok{color:var(--good)} .rev .rhead .ans b.no{color:var(--miss)}
+.rev .rbody{padding:0 14px 13px}
+
+/* Stats */
+.statgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;margin-bottom:14px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 14px}
+.stat .n{font-size:24px;font-weight:800;letter-spacing:-.5px}
+.stat .l{font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-top:2px}
+.catstat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:8px}
+.catstat .top{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;margin-bottom:7px}
+.catstat .top .m{margin-left:auto;font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.6px}
+.catstat .top .m.m3{color:var(--good)} .catstat .top .m.m2{color:var(--hard)} .catstat .top .m.m1{color:var(--miss)} .catstat .top .m.m0{color:var(--tx3)}
+.catstat .bar{height:7px;border-radius:5px;background:var(--card2);overflow:hidden}
+.catstat .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc2))}
+.catstat .sub{font-size:12px;color:var(--tx3);margin-top:5px}
+.sliplist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+.sliplist li{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 13px;font-size:13.5px}
+.sliplist li b{margin-left:auto;color:var(--hard)}
+h2.sec{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--tx3);margin:20px 0 9px}
+.danger{color:var(--miss);border-color:rgba(255,107,107,.4) !important}
+.histrow{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 13px;font-size:13px;margin-bottom:7px;color:var(--tx2)}
+.histrow .sc{font-weight:800;font-size:14px;color:var(--tx)}
+.histrow .pf{margin-left:auto;font-weight:800;font-size:11.5px;letter-spacing:.5px}
+.histrow .pf.p{color:var(--good)} .histrow .pf.f{color:var(--miss)}
+
+/* Modal */
+.modal{position:fixed;inset:0;background:rgba(5,9,16,.66);display:flex;align-items:flex-end;justify-content:center;z-index:50;animation:fade .18s ease}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.sheet{background:var(--card);border:1px solid var(--line2);border-radius:18px 18px 0 0;max-width:var(--maxw);width:100%;max-height:86vh;overflow:auto;padding:20px 20px 30px;box-shadow:var(--shadow)}
+@media(min-width:700px){.modal{align-items:center;padding:20px}.sheet{border-radius:18px}}
+.sheet h3{margin:0 0 3px;font-size:17px;display:flex;align-items:center;gap:8px}
+.sheet .close{position:sticky;float:right;top:0;font-size:20px;color:var(--tx3);padding:2px 8px}
+.fcard{background:var(--card2);border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin-top:10px}
+.fcard .fn{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--acc);margin-bottom:4px}
+.fcard .fx{font-size:14.5px;line-height:1.55}
+.fcard .fx code{font:600 13.5px/1.4 ui-monospace,Menlo,Consolas,monospace;background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:1px 6px;color:var(--tx)}
+.fcard .fx small{display:block;color:var(--tx3);margin-top:4px;font-size:12.5px}
+.foot{margin-top:26px;text-align:center;font-size:11.5px;color:var(--tx3)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><b>MedCalc Drill</b><span>BN medication calculations</span></div>
+    <button class="iconbtn" id="btnFormulas" title="Formula sheet">∑</button>
+    <button class="iconbtn" id="btnTheme" title="Theme">◐</button>
+  </header>
+
+  <div class="controls">
+    <div class="seg" id="nav">
+      <button data-v="drill" class="on">Drill</button>
+      <button data-v="test">Test mode</button>
+      <button data-v="stats">Stats</button>
+    </div>
+  </div>
+
+  <div id="view"></div>
+  <div class="foot">100% offline · progress saved on this device · built for the med-calc gate 💪</div>
+</div>
+
+<div id="modal" class="modal hidden"><div class="sheet" id="sheet"></div></div>
+
+<script>
+'use strict';
+/* ============================== utils ============================== */
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const rnd=a=>a[Math.floor(Math.random()*a.length)];
+const chance=p=>Math.random()<p;
+const near=(a,b,t)=>Math.abs(a-b)<=(t!=null?t:Math.max(Math.abs(b)*0.005,0.0005));
+function fmt(n){ if(!isFinite(n))return'—'; const r=Math.round(n*1000)/1000; return String(parseFloat(r.toFixed(3))); }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+const NAMES=['Aroha','Wiremu','Hemi','Mere','Tane','Nikau','Moana','Sione','Losa','Mei','Chen','Yuki','Raj','Priya','Anika','Fatima','Omar','Grace','Noah','Ella','Jack','Olivia','Sam','Ruby','Leo','Isla'];
+
+/* ============================== state ============================== */
+const KEY='medcalcdrill.v1';
+const CATS={
+  conv:{name:'Conversions',icon:'🔁'},
+  tab:{name:'Tablets & capsules',icon:'💊'},
+  liq:{name:'Oral liquids',icon:'🥄'},
+  inj:{name:'Injections',icon:'💉'},
+  rate:{name:'IV rate (mL/hr)',icon:'⏱️'},
+  drip:{name:'Drip rate (dpm)',icon:'💧'},
+  time:{name:'Infusion time',icon:'⌛'},
+  wt:{name:'Weight-based',icon:'⚖️'},
+};
+const SLIPS={
+  units:'Decimal-place slip (×10 / ×100 / ×1000)',
+  inverted:'Formula upside-down (stock ÷ dose)',
+  volume:'Forgot the stock volume (× V)',
+  time:'Minutes ↔ hours mix-up',
+  factor:'Wrong / missing drop factor',
+  perdose:'Per-day vs per-dose mix-up',
+  weight:'Forgot to multiply by weight',
+  rounding:'Right maths, wrong rounding',
+  stopped:'Stopped one step early',
+};
+let S=load();
+function load(){
+  try{ const s=JSON.parse(localStorage.getItem(KEY)); if(s&&s.stats) return s; }catch(e){}
+  const stats={}; Object.keys(CATS).forEach(c=>stats[c]={a:0,c:0,last:[]});
+  return {theme:'dark',stats,slips:{},streak:0,best:0,tests:[],cat:'all',tn:10,tt:0,tp:100};
+}
+function save(){ localStorage.setItem(KEY,JSON.stringify(S)); }
+
+/* ============================== generators ============================== */
+/* Every generator returns:
+   {cat, prompt, unit, answer, exact, tol, roundTo, steps:[], traps:[{v,slip,msg}]} */
+
+function gConv(){
+  const dirs=[
+    ['g','mg',1000,[0.05,0.06,0.075,0.1,0.125,0.15,0.2,0.25,0.3,0.4,0.5,0.6,0.75,0.8,1,1.2,1.25,1.5,2,2.5]],
+    ['mg','g',0.001,[25,40,50,60,75,100,125,150,200,250,300,400,500,600,750,800,1000,1250,1500,2000]],
+    ['mg','mcg',1000,[0.025,0.05,0.0625,0.075,0.1,0.125,0.15,0.2,0.25,0.4,0.5,0.6,0.75,0.8,1]],
+    ['mcg','mg',0.001,[25,50,62.5,75,100,125,150,200,250,400,500,600,750,800,1000]],
+    ['L','mL',1000,[0.05,0.1,0.125,0.2,0.25,0.3,0.5,0.6,0.75,1,1.2,1.5,1.75,2,2.5]],
+    ['mL','L',0.001,[50,100,125,200,250,300,500,600,750,1000,1200,1500,1750,2000,2500]],
+  ];
+  const [from,to,f,pool]=rnd(dirs);
+  const v=rnd(pool), ans=v*f;
+  const bigger=f>1;
+  const traps=[
+    {v:v/f, slip:'units', msg:`moved the decimal the <b>wrong way</b> — going from ${from} to ${to} the number should get ${bigger?'bigger':'smaller'}.`},
+    {v:bigger? v*100 : v/100, slip:'units', msg:`moved the decimal <b>2 places instead of 3</b> — the jump between ${from} and ${to} is ×1000.`},
+  ];
+  return {cat:'conv',
+    prompt:`Convert <b>${fmt(v)} ${from}</b> to ${to==='mcg'?'micrograms':to==='mg'?'milligrams':to==='g'?'grams':to==='mL'?'millilitres':'litres'}.`,
+    unit:to, answer:ans, exact:ans, tol:0, steps:[
+      `Rule: 1 ${bigger?from:to} = 1000 ${bigger?to:from} — so to go from ${from} → ${to}, ${bigger?'<em>multiply</em>':'<em>divide</em>'} by 1000.`,
+      `${fmt(v)} ${from} ${bigger?'×':'÷'} 1000 = <em>${fmt(ans)} ${to}</em>`,
+    ], traps};
+}
+
+const TABS=[
+  ['paracetamol',500,'mg','tablet'],['ibuprofen',200,'mg','tablet'],
+  ['furosemide',40,'mg','tablet'],['furosemide',20,'mg','tablet'],
+  ['prednisone',5,'mg','tablet'],['prednisone',20,'mg','tablet'],
+  ['metformin',500,'mg','tablet'],['aspirin',100,'mg','tablet'],['aspirin',300,'mg','tablet'],
+  ['codeine',30,'mg','tablet'],['codeine',15,'mg','tablet'],
+  ['warfarin',2,'mg','tablet'],['warfarin',5,'mg','tablet'],
+  ['spironolactone',25,'mg','tablet'],['allopurinol',100,'mg','tablet'],['erythromycin',250,'mg','tablet'],
+  ['digoxin',250,'mcg','tablet'],['digoxin',62.5,'mcg','tablet'],
+  ['levothyroxine',50,'mcg','tablet'],['levothyroxine',100,'mcg','tablet'],
+  ['amoxicillin',250,'mg','capsule'],['amoxicillin',500,'mg','capsule'],['cephalexin',500,'mg','capsule'],
+];
+function gTab(){
+  const [drug,S0,unit,form]=rnd(TABS);
+  const A=rnd(form==='capsule'?[1,2,3]:[0.5,1,1.5,2,3]);
+  const ordered=S0*A;
+  let doseTxt=`${fmt(ordered)} ${unit}`, convStep=null;
+  const traps=[];
+  // unit twist: present the order in the "bigger" unit to force a conversion
+  if(unit==='mg' && ordered>=1000 && chance(.8)){
+    doseTxt=`${fmt(ordered/1000)} g`;
+    convStep=`Convert first: ${fmt(ordered/1000)} g × 1000 = <em>${fmt(ordered)} mg</em> (same unit as the stock).`;
+    traps.push({v:A/1000, slip:'units', msg:`forgot to convert <b>grams → milligrams</b> before dividing. Always match units first.`});
+  } else if(unit==='mcg' && ordered>=100 && chance(.5)){
+    doseTxt=`${fmt(ordered/1000)} mg`;
+    convStep=`Convert first: ${fmt(ordered/1000)} mg × 1000 = <em>${fmt(ordered)} mcg</em> (same unit as the stock).`;
+    traps.push({v:A/1000, slip:'units', msg:`forgot to convert <b>mg → micrograms</b> before dividing. Always match units first.`});
+  }
+  if(A!==1 && Math.abs(1/A-A)>0.01) traps.push({v:1/A, slip:'inverted', msg:`divided <b>stock ÷ dose</b> instead of <b>dose ÷ stock</b>. Required dose always goes on top.`});
+  const steps=[];
+  if(convStep) steps.push(convStep);
+  steps.push(`${form.charAt(0).toUpperCase()+form.slice(1)}s = dose required ÷ stock strength = ${fmt(ordered)} ÷ ${fmt(S0)} = <em>${fmt(A)}</em>`);
+  steps.push(`Sense check: ${fmt(A)} ${form}${A===1?'':'s'} is a reasonable amount to give${form==='capsule'?' (capsules can never be halved)':''}.`);
+  return {cat:'tab',
+    prompt:`${rnd(NAMES)} is charted <b>${drug} ${doseTxt}</b> orally. Stock on hand: <b>${fmt(S0)} ${unit} ${form}s</b>. How many ${form}s will you give?`,
+    unit:form+'s', answer:A, exact:A, tol:0, steps, traps};
+}
+
+const LIQS=[
+  ['paracetamol',120,5],['paracetamol',250,5],['amoxicillin',125,5],['amoxicillin',250,5],
+  ['ibuprofen',100,5],['cephalexin',125,5],['erythromycin',200,5],['phenoxymethylpenicillin',125,5],
+  ['morphine elixir',1,1],['ondansetron syrup',4,5],
+];
+function gLiq(){
+  for(let i=0;i<50;i++){
+    const [drug,S0,V]=rnd(LIQS);
+    const k=rnd([0.5,1,1.5,2,2.5,3,4]);
+    const ordered=S0*k, ans=V*k;
+    if(ans>25||ans<2) continue;
+    if(Math.round(ordered*2)!==ordered*2) continue;      // dose to nearest 0.5
+    if(ordered<2) continue;
+    const traps=[];
+    if(V!==1 && Math.abs(k-ans)>0.01) traps.push({v:k, slip:'volume', msg:`that's how many "stock lots" you need — you forgot to <b>× ${V} mL</b> (the stock volume) at the end.`});
+    if(Math.abs(V/k-ans)>0.01 && k!==1) traps.push({v:V/k, slip:'inverted', msg:`formula upside-down: it's <b>(dose required ÷ stock) × volume</b>, required dose on top.`});
+    return {cat:'liq',
+      prompt:`${rnd(NAMES)} is charted <b>${drug} ${fmt(ordered)} mg</b> orally. Stock: <b>${fmt(S0)} mg in ${fmt(V)} mL</b>. What volume will you give?`,
+      unit:'mL', answer:ans, exact:ans, tol:0, steps:[
+        `Volume = (dose required ÷ stock strength) × stock volume`,
+        `= (${fmt(ordered)} ÷ ${fmt(S0)}) × ${fmt(V)} = ${fmt(k)} × ${fmt(V)} = <em>${fmt(ans)} mL</em>`,
+        `Sense check: ${fmt(ans)} mL is a sensible oral volume.`,
+      ], traps};
+  }
+  return gTab();
+}
+
+const INJS=[ // [drug, strength, per mL(s), unit, route]
+  ['morphine',10,1,'mg','subcutaneously'],['metoclopramide',10,2,'mg','IM'],
+  ['furosemide',20,2,'mg','IV'],['ondansetron',4,2,'mg','IV'],
+  ['hydrocortisone',100,2,'mg','IV'],['gentamicin',80,2,'mg','IV'],
+  ['enoxaparin',100,1,'mg','subcutaneously'],['heparin',5000,1,'units','subcutaneously'],
+  ['ceftriaxone',1000,10,'mg','IV'],['naloxone',0.4,1,'mg','IV'],
+  ['atropine',0.6,1,'mg','IV'],['digoxin',500,2,'mcg','IV'],
+];
+function gInj(){
+  for(let i=0;i<80;i++){
+    const [drug,S0,V,unit,route]=rnd(INJS);
+    const k=rnd([0.25,0.5,0.75,1,1.25,1.5,2,2.5,3]);
+    const ordered=S0*k, ans=V*k;
+    const maxV=V>=10?10:3;
+    if(ans>maxV||ans<0.2) continue;
+    if(Math.round(ans*100)!==Math.round(ans*100*1)/1) continue;
+    if(unit==='units' && Math.round(ordered)!==ordered) continue;
+    if(Math.round(ordered*100)/100!==ordered) continue;  // dose ≤ 2 dp
+    if(unit!=='units' && S0>=1 && Math.round(ordered*2)!==ordered*2) continue; // most doses to 0.5
+    const traps=[];
+    if(V!==1 && Math.abs(k-ans)>0.005) traps.push({v:k, slip:'volume', msg:`you forgot to <b>× ${V} mL</b> (the volume the stock comes in).`});
+    if(k!==1 && Math.abs(V/k-ans)>0.005) traps.push({v:V/k, slip:'inverted', msg:`formula upside-down — required dose goes <b>on top</b>.`});
+    return {cat:'inj',
+      prompt:`${rnd(NAMES)} is charted <b>${drug} ${fmt(ordered)} ${unit}</b> ${route}. Stock: <b>${fmt(S0)} ${unit} in ${fmt(V)} mL</b>. What volume will you draw up?`,
+      unit:'mL', answer:ans, exact:ans, tol:0, steps:[
+        `Volume = (dose required ÷ stock strength) × stock volume`,
+        `= (${fmt(ordered)} ÷ ${fmt(S0)}) × ${fmt(V)} = <em>${fmt(ans)} mL</em>`,
+        `Sense check: ${fmt(ans)} mL is drawable in a syringe${ans<1?' (use a 1 mL syringe for accuracy)':''}.`,
+      ], traps};
+  }
+  return gTab();
+}
+
+const FLUIDS=['0.9% sodium chloride',"compound sodium lactate (Hartmann's)",'5% glucose','0.45% sodium chloride with 5% glucose'];
+const MINIBAG=['cefazolin 1 g','vancomycin 500 mg','potassium chloride 10 mmol','metronidazole 500 mg'];
+const RATE_H=[[1000,8],[1000,10],[1000,4],[1000,12],[1000,6],[1000,24],[500,4],[500,2],[500,6],[500,8],[250,2],[250,4]];
+const RATE_M=[[100,30],[100,20],[100,15],[50,30],[50,15],[250,30],[200,60],[150,30],[100,60]];
+function gRate(){
+  if(chance(.55)){
+    const [v,h]=rnd(RATE_H), exact=v/h, ans=Math.round(exact);
+    const needRound=Math.abs(exact-ans)>0.001;
+    const traps=[{v:exact/60, slip:'time', msg:`that's mL per <b>minute</b> — the pump wants mL per <b>hour</b>.`}];
+    return {cat:'rate',
+      prompt:`<b>${fmt(v)} mL</b> of ${rnd(FLUIDS)} is charted to run over <b>${fmt(h)} hours</b> via infusion pump. What rate will you set?${needRound?'<span class="roundnote">Round to the nearest whole number.</span>':''}`,
+      unit:'mL/hr', answer:ans, exact, tol:0, steps:[
+        `Rate (mL/hr) = volume ÷ time in hours`,
+        `= ${fmt(v)} ÷ ${fmt(h)} = <em>${fmt(exact)} mL/hr</em>${needRound?` → round to <em>${fmt(ans)} mL/hr</em>`:''}`,
+      ], traps};
+  } else {
+    const [v,m]=rnd(RATE_M), exact=v/m*60, ans=Math.round(exact);
+    const traps=[{v:v/m, slip:'time', msg:`that's mL per <b>minute</b>. Multiply by 60 to get mL per <b>hour</b> — pumps are set in mL/hr.`}];
+    return {cat:'rate',
+      prompt:`${rnd(NAMES)} has <b>${rnd(MINIBAG)}</b> in <b>${fmt(v)} mL</b> to run over <b>${fmt(m)} minutes</b> via pump. What rate in mL/hr will you set?`,
+      unit:'mL/hr', answer:ans, exact, tol:0, steps:[
+        `Rate (mL/hr) = (volume ÷ minutes) × 60`,
+        `= (${fmt(v)} ÷ ${fmt(m)}) × 60 = <em>${fmt(exact)} mL/hr</em>`,
+      ], traps};
+  }
+}
+
+const DRIPS=[ // [mL, minutes, drop factor]
+  [1000,480,20],[1000,600,20],[1000,720,20],[500,240,20],[500,360,20],[500,480,20],
+  [250,120,20],[100,30,20],[100,60,20],[1000,360,20],
+  [100,60,60],[50,30,60],[60,60,60],[100,120,60],[30,30,60],[150,120,60],[80,60,60],
+];
+function gDrip(){
+  const [v,m,f]=rnd(DRIPS), exact=v*f/m, ans=Math.round(exact);
+  const needRound=Math.abs(exact-ans)>0.001;
+  const timeTxt = m%60===0 ? `${m/60} hour${m/60===1?'':'s'}` : `${m} minutes`;
+  const setTxt = f===20 ? 'a standard giving set (20 drops/mL)' : 'a microdrip burette set (60 drops/mL)';
+  const traps=[
+    {v:v*f/(m/60), slip:'time', msg:`you divided by <b>hours</b> — the drip-rate formula needs time in <b>minutes</b>.`},
+    {v:v/m, slip:'factor', msg:`you forgot the <b>drop factor</b> (× ${f}).`},
+  ];
+  const other=f===20?60:20;
+  if(Math.abs(Math.round(v*other/m)-ans)>1) traps.push({v:v*other/m, slip:'factor', msg:`you used a drop factor of <b>${other}</b> but this is ${f===20?'a standard set (20)':'a microdrip set (60)'}.`});
+  return {cat:'drip',
+    prompt:`<b>${fmt(v)} mL</b> of ${rnd(FLUIDS)} is to run over <b>${timeTxt}</b> using ${setTxt} — no pump available. What drip rate will you set?${needRound?'<span class="roundnote">Round to the nearest whole drop.</span>':''}`,
+    unit:'drops/min', answer:ans, exact, tol:0, steps:[
+      m%60===0?`Convert time to minutes: ${m/60} h × 60 = <em>${m} min</em>`:`Time is already in minutes: <em>${m} min</em>`,
+      `Drip rate = (volume × drop factor) ÷ time in minutes`,
+      `= (${fmt(v)} × ${f}) ÷ ${m} = <em>${fmt(exact)}</em>${needRound?` → round to <em>${fmt(ans)} drops/min</em>`:' drops/min'}`,
+    ], traps};
+}
+
+const TIMES=[ // [mL, mL/hr, answer, unit]
+  [1000,125,8,'hours'],[1000,100,10,'hours'],[500,125,4,'hours'],[500,100,5,'hours'],
+  [250,125,2,'hours'],[1000,250,4,'hours'],[500,250,2,'hours'],[250,50,5,'hours'],
+  [100,200,30,'minutes'],[250,100,150,'minutes'],[50,100,30,'minutes'],[100,300,20,'minutes'],[150,200,45,'minutes'],
+];
+function gTime(){
+  const [v,r,ans,unit]=rnd(TIMES);
+  const hrs=v/r;
+  const traps=[];
+  if(unit==='hours'){ traps.push({v:ans*60, slip:'time', msg:`that's the answer in <b>minutes</b> — the question asks for hours.`}); }
+  else { traps.push({v:hrs, slip:'time', msg:`that's the answer in <b>hours</b> — the question asks for minutes (× 60).`}); }
+  if(Math.abs(r/v-ans)>0.01) traps.push({v:r/v, slip:'inverted', msg:`upside-down: it's <b>volume ÷ rate</b>, not rate ÷ volume.`});
+  return {cat:'time',
+    prompt:`An infusion of <b>${fmt(v)} mL</b> is running at <b>${fmt(r)} mL/hr</b>. How long will it take to finish, in <b>${unit}</b>?`,
+    unit, answer:ans, exact:ans, tol:0, steps:[
+      `Time (hours) = volume ÷ rate = ${fmt(v)} ÷ ${fmt(r)} = <em>${fmt(hrs)} hours</em>`,
+      unit==='minutes'?`Convert: ${fmt(hrs)} h × 60 = <em>${fmt(ans)} minutes</em>`:`Answer: <em>${fmt(ans)} hours</em>`,
+    ], traps};
+}
+
+const WT_SIMPLE=[ // [drug, mg/kg, weights[]]
+  ['paracetamol',15,[10,12,14,16,18,20,22,24,26]],
+  ['ibuprofen',10,[12,15,18,20,24,30]],
+  ['gentamicin',5,[56,60,64,70,80,90]],
+  ['gentamicin',7,[60,70,80,90]],
+  ['enoxaparin',1,[60,70,75,80,85,90,100]],
+  ['cefazolin',25,[12,16,20,24,60,80]],
+  ['aciclovir',10,[14,18,22,60,70,80]],
+];
+const WT_DIV=[ // [drug, mg/kg/day, doses/day, weights[]]
+  ['amoxicillin',25,3,[12,15,18,24,30,36]],
+  ['cephalexin',25,4,[16,20,24,32,40]],
+  ['cefuroxime',20,2,[9,12,15,18,21]],
+  ['erythromycin',40,4,[10,15,20,25]],
+];
+const WT_2STEP=[ // [drug, mg/kg, weights[], stock mg, stock mL, form]
+  ['paracetamol',15,[10,12,16,20,24],250,5,'oral liquid'],
+  ['gentamicin',5,[60,64,80],80,2,'injection'],
+  ['enoxaparin',1,[60,70,80,90],100,1,'injection'],
+  ['morphine',0.1,[50,60,70,80],10,1,'injection'],
+];
+function gWt(){
+  const mode=rnd(['a','a','b','c']);
+  if(mode==='a'){
+    const [drug,d,ws]=rnd(WT_SIMPLE), w=rnd(ws), ans=d*w;
+    const kid=w<40;
+    const traps=[{v:d, slip:'weight', msg:`that's the dose per <b>one kilogram</b> — multiply by the patient's weight (${fmt(w)} kg).`}];
+    return {cat:'wt',
+      prompt:`${rnd(NAMES)}${kid?`, a child weighing <b>${fmt(w)} kg</b>,`:` weighs <b>${fmt(w)} kg</b> and`} is charted <b>${drug} ${fmt(d)} mg/kg</b> per dose. How many mg is one dose?`,
+      unit:'mg', answer:ans, exact:ans, tol:0, steps:[
+        `Dose = mg/kg × weight = ${fmt(d)} × ${fmt(w)} = <em>${fmt(ans)} mg</em>`,
+        `Sense check: written out — ${fmt(d)} mg for every one of ${fmt(w)} kilograms.`,
+      ], traps};
+  }
+  if(mode==='b'){
+    const [drug,d,n,ws]=rnd(WT_DIV), w=rnd(ws), day=d*w, ans=day/n;
+    const traps=[
+      {v:day, slip:'perdose', msg:`that's the total for the whole <b>day</b> — divide by ${n} to get one dose.`},
+      {v:day*n, slip:'perdose', msg:`you <b>multiplied</b> by the number of doses instead of dividing.`},
+    ];
+    return {cat:'wt',
+      prompt:`A child weighing <b>${fmt(w)} kg</b> is charted <b>${drug} ${fmt(d)} mg/kg/day</b> in <b>${n} divided doses</b>. How many mg is each dose?`,
+      unit:'mg', answer:ans, exact:ans, tol:0, steps:[
+        `Daily total = ${fmt(d)} mg/kg × ${fmt(w)} kg = <em>${fmt(day)} mg per day</em>`,
+        `Each dose = ${fmt(day)} ÷ ${n} doses = <em>${fmt(ans)} mg</em>`,
+      ], traps};
+  }
+  const [drug,d,ws,sm,sv,form]=rnd(WT_2STEP), w=rnd(ws), mg=d*w, ans=mg/sm*sv;
+  const traps=[
+    {v:mg, slip:'stopped', msg:`that's the dose in <b>mg</b> — the question asks what <b>volume</b> to give. One more step.`},
+    {v:mg/sm, slip:'volume', msg:`forgot to × ${fmt(sv)} mL (the stock volume).`},
+  ];
+  return {cat:'wt',
+    prompt:`${rnd(NAMES)} weighs <b>${fmt(w)} kg</b> and is charted <b>${drug} ${fmt(d)} mg/kg</b>. Stock ${form}: <b>${fmt(sm)} mg in ${fmt(sv)} mL</b>. What volume will you give?`,
+    unit:'mL', answer:ans, exact:ans, tol:0, steps:[
+      `Step 1 — dose: ${fmt(d)} mg/kg × ${fmt(w)} kg = <em>${fmt(mg)} mg</em>`,
+      `Step 2 — volume: (${fmt(mg)} ÷ ${fmt(sm)}) × ${fmt(sv)} = <em>${fmt(ans)} mL</em>`,
+    ], traps};
+}
+
+const GEN={conv:gConv,tab:gTab,liq:gLiq,inj:gInj,rate:gRate,drip:gDrip,time:gTime,wt:gWt};
+function makeQ(cat){
+  const c = cat && cat!=='all' ? cat : rnd(Object.keys(CATS));
+  const q = GEN[c]();
+  q.traps=(q.traps||[]).filter(t=>isFinite(t.v)&&!near(t.v,q.answer));
+  return q;
+}
+
+/* ============================== grading ============================== */
+function grade(q,u){
+  const eps=1e-6;
+  if(Math.abs(u-q.answer)<=(q.tol||0)+eps) return {ok:true};
+  // right maths, wrong rounding
+  if(q.exact!=null && Math.abs(q.exact-q.answer)>eps && Math.abs(u-q.exact)<=0.06)
+    return {ok:false, slip:'rounding', msg:`your maths is right (${fmt(q.exact)}) but the answer must be <b>rounded to ${fmt(q.answer)}</b> as instructed.`, near:true};
+  for(const t of q.traps){ if(near(u,t.v)) return {ok:false, slip:t.slip, msg:t.msg}; }
+  // generic decimal-place slip
+  if(u>0){ for(const p of [10,100,1000]){
+    if(near(u/q.answer,p,p*0.004)||near(u/q.answer,1/p,0.004/p))
+      return {ok:false, slip:'units', msg:`you're out by a factor of <b>${p}</b> — a decimal-place slip. In real life this is the dangerous one: always sense-check the size of your answer.`};
+  }}
+  return {ok:false};
+}
+function recordDrill(cat,ok,slip){
+  const st=S.stats[cat]; st.a++; if(ok)st.c++;
+  st.last.push(ok?1:0); if(st.last.length>20)st.last.shift();
+  if(slip) S.slips[slip]=(S.slips[slip]||0)+1;
+  S.streak = ok ? S.streak+1 : 0;
+  if(S.streak>S.best) S.best=S.streak;
+  save();
+}
+function mastery(cat){
+  const st=S.stats[cat];
+  if(st.a<8) return {lv:0,txt:'untrained',pct:st.a?Math.round(st.c/st.a*100):0};
+  const p=Math.round(st.last.reduce((a,b)=>a+b,0)/st.last.length*100);
+  return {lv: p>=90?3 : p>=70?2 : 1, txt: p>=90?'mastered':p>=70?'solid':'shaky', pct:p};
+}
+
+/* ============================== views ============================== */
+let VIEW='drill', Q=null, answered=false;
+let T=null; // test run state
+const view=$('#view');
+
+function nav(v){
+  VIEW=v;
+  $$('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  if(v==='drill') renderDrill(true);
+  else if(v==='test') T&&T.live ? renderTestQ() : renderTestSetup();
+  else renderStats();
+}
+$$('#nav button').forEach(b=>b.onclick=()=>nav(b.dataset.v));
+
+/* ---------- drill ---------- */
+function chipRow(){
+  const all=`<button class="chip ${S.cat==='all'?'on':''}" data-c="all">✨ Mixed</button>`;
+  return `<div class="chips">${all}${Object.entries(CATS).map(([k,c])=>{
+    const m=mastery(k);
+    return `<button class="chip ${S.cat===k?'on':''}" data-c="${k}"><i class="mdot m${m.lv}"></i>${c.icon} ${c.name}</button>`;
+  }).join('')}</div>`;
+}
+function renderDrill(newQ){
+  if(newQ||!Q) { Q=makeQ(S.cat); answered=false; }
+  view.innerHTML=`
+    <div class="drillbar">
+      <span class="pill ${S.streak>=5?'hot':''}">🔥 streak <b>${S.streak}</b></span>
+      <span class="pill">🏆 best <b>${S.best}</b></span>
+    </div>
+    ${chipRow()}
+    <div class="card">
+      <div class="cmeta"><span class="tag acc">${CATS[Q.cat].icon} ${CATS[Q.cat].name}</span><span class="tag right">drill</span></div>
+      <div class="q">${Q.prompt}</div>
+      <div class="ansrow">
+        <div class="ansbox"><input id="ans" type="text" inputmode="decimal" autocomplete="off" placeholder="answer"/><span class="unit">${esc(Q.unit)}</span></div>
+        <button class="btn primary" id="check">Check</button>
+      </div>
+      <div id="fb"></div>
+    </div>`;
+  $$('.chip').forEach(b=>b.onclick=()=>{S.cat=b.dataset.c;save();renderDrill(true);});
+  const inp=$('#ans');
+  inp.focus();
+  $('#check').onclick=checkDrill;
+  inp.onkeydown=e=>{ if(e.key==='Enter'){ answered ? renderDrill(true) : checkDrill(); } };
+}
+function checkDrill(){
+  if(answered) return;
+  const raw=$('#ans').value.trim().replace(',','.');
+  const u=parseFloat(raw);
+  if(raw===''||!isFinite(u)){ $('#ans').focus(); return; }
+  const g=grade(Q,u);
+  answered=true;
+  recordDrill(Q.cat,g.ok,g.slip);
+  const fb=$('#fb');
+  fb.innerHTML=`
+    <div class="fb ${g.ok?'ok':(g.near?'near':'no')}">
+      <div class="h">${g.ok?`✅ Correct — ${fmt(Q.answer)} ${esc(Q.unit)}`:(g.near?`⚠️ So close`:`❌ Not quite — it's ${fmt(Q.answer)} ${esc(Q.unit)}`)}</div>
+      ${g.ok&&S.streak>0&&S.streak%10===0?`<div>🔥 ${S.streak} in a row. That's gate-passing form.</div>`:''}
+      ${g.msg?`<div class="slip">💡 <b>Spotted your slip:</b> ${g.msg}</div>`:''}
+    </div>
+    <div class="steps"><div class="lab">Worked solution</div><ol>${Q.steps.map(s=>`<li><span>${s}</span></li>`).join('')}</ol></div>
+    <div class="nextrow"><button class="btn primary" id="next">Next question ↵</button></div>`;
+  $('#next').onclick=()=>renderDrill(true);
+  $('#next').focus();
+  document.onkeydown=e=>{ if(answered&&e.key==='Enter'&&VIEW==='drill'){ document.onkeydown=null; renderDrill(true);} };
+}
+
+/* ---------- test mode ---------- */
+function renderTestSetup(){
+  const last=S.tests[0];
+  view.innerHTML=`
+    <div class="card setup">
+      <h3>🎯 Test mode — simulate the gate</h3>
+      <p>Mixed questions across every category, no feedback until the end. Most schools require <b>90–100%</b> on the real med-calc test — train like it counts.</p>
+      <div class="setrow"><span class="lab">Questions</span>
+        <div class="seg" id="segN">${[10,20].map(n=>`<button data-n="${n}" class="${S.tn===n?'on':''}">${n}</button>`).join('')}</div></div>
+      <div class="setrow"><span class="lab">Timer</span>
+        <div class="seg" id="segT">${[[0,'Off'],[15,'15 min'],[30,'30 min']].map(([t,l])=>`<button data-t="${t}" class="${S.tt===t?'on':''}">${l}</button>`).join('')}</div></div>
+      <div class="setrow"><span class="lab">Pass mark</span>
+        <div class="seg" id="segP">${[80,90,100].map(p=>`<button data-p="${p}" class="${S.tp===p?'on':''}">${p}%</button>`).join('')}</div></div>
+      <button class="bigstart" id="start">START TEST</button>
+      ${last?`<p style="margin:12px 0 0;text-align:center">Last attempt: <b>${last.score}%</b> — ${last.pass?'PASS ✅':'below the mark ❌'}</p>`:''}
+    </div>`;
+  $('#segN').onclick=e=>{ if(e.target.dataset.n){S.tn=+e.target.dataset.n;save();renderTestSetup();} };
+  $('#segT').onclick=e=>{ if(e.target.dataset.t!=null){S.tt=+e.target.dataset.t;save();renderTestSetup();} };
+  $('#segP').onclick=e=>{ if(e.target.dataset.p){S.tp=+e.target.dataset.p;save();renderTestSetup();} };
+  $('#start').onclick=startTest;
+}
+function startTest(){
+  // even category spread, then shuffle
+  const cats=Object.keys(CATS), qs=[];
+  for(let i=0;i<S.tn;i++) qs.push(makeQ(cats[i%cats.length]));
+  for(let i=qs.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [qs[i],qs[j]]=[qs[j],qs[i]]; }
+  T={live:true,qs,i:0,ua:[],end:S.tt? Date.now()+S.tt*60000 : null,timer:null};
+  renderTestQ();
+  if(T.end){ T.timer=setInterval(()=>{
+    const el=$('#ttimer'); if(!el){clearInterval(T.timer);return;}
+    const left=T.end-Date.now();
+    if(left<=0){ finishTest(); return; }
+    const m=Math.floor(left/60000), s=Math.floor(left%60000/1000);
+    el.textContent=`${m}:${String(s).padStart(2,'0')}`;
+    el.classList.toggle('low',left<60000);
+  },250); }
+}
+function renderTestQ(){
+  const q=T.qs[T.i];
+  view.innerHTML=`
+    <div class="testbar">
+      <span>Question <b>${T.i+1}</b> / ${T.qs.length}</span>
+      ${T.end?`<span class="timer" id="ttimer">–:––</span>`:''}
+    </div>
+    <div class="tprog"><i style="width:${T.i/T.qs.length*100}%"></i></div>
+    <div class="card">
+      <div class="cmeta"><span class="tag acc">${CATS[q.cat].icon} ${CATS[q.cat].name}</span><span class="tag right">test</span></div>
+      <div class="q">${q.prompt}</div>
+      <div class="ansrow">
+        <div class="ansbox"><input id="ans" type="text" inputmode="decimal" autocomplete="off" placeholder="answer"/><span class="unit">${esc(q.unit)}</span></div>
+        <button class="btn primary" id="sub">${T.i+1===T.qs.length?'Finish':'Next →'}</button>
+      </div>
+    </div>
+    <div class="nextrow"><button class="btn ghost danger" id="abort">Abandon test</button></div>`;
+  const inp=$('#ans'); inp.focus();
+  const submit=()=>{
+    const raw=inp.value.trim().replace(',','.');
+    const u=parseFloat(raw);
+    if(raw===''||!isFinite(u)){ inp.focus(); return; }
+    T.ua.push(u);
+    T.i++;
+    T.i>=T.qs.length ? finishTest() : renderTestQ();
+  };
+  $('#sub').onclick=submit;
+  inp.onkeydown=e=>{ if(e.key==='Enter') submit(); };
+  $('#abort').onclick=()=>{ if(confirm('Abandon this test? Nothing will be recorded.')){ clearInterval(T.timer); T=null; renderTestSetup(); } };
+}
+function finishTest(){
+  clearInterval(T.timer); T.live=false;
+  while(T.ua.length<T.qs.length) T.ua.push(NaN); // timer ran out
+  const res=T.qs.map((q,i)=>{ const u=T.ua[i]; const g=isFinite(u)?grade(q,u):{ok:false}; return {q,u,g}; });
+  res.forEach(r=>recordDrill(r.q.cat,r.g.ok,r.g.slip));
+  const nOk=res.filter(r=>r.g.ok).length;
+  const score=Math.round(nOk/res.length*100);
+  const pass=score>=S.tp;
+  S.tests.unshift({d:new Date().toISOString().slice(0,10),score,n:res.length,pass});
+  S.tests=S.tests.slice(0,12); save();
+  view.innerHTML=`
+    <div class="result-hero ${pass?'pass':'fail'}">
+      <div class="big">${score}%</div>
+      <div class="sub"><b>${nOk} / ${res.length}</b> correct · pass mark ${S.tp}% — ${pass?'<b>PASSED</b> 🎉':'below the mark. The review below is where the marks are.'}</div>
+    </div>
+    ${res.map((r,i)=>`
+      <div class="rev">
+        <div class="rhead" data-i="${i}">
+          <span class="ic">${r.g.ok?'✅':'❌'}</span>
+          <span class="qq">${r.q.prompt}</span>
+          <span class="ans">yours: <b class="${r.g.ok?'ok':'no'}">${isFinite(r.u)?fmt(r.u):'—'}</b>${r.g.ok?'':`correct: <b class="ok">${fmt(r.q.answer)}</b>`}</span>
+        </div>
+        <div class="rbody hidden" id="rb${i}">
+          ${r.g.msg?`<div class="fb no" style="margin:0 0 10px"><div class="slip" style="margin:0">💡 ${r.g.msg}</div></div>`:''}
+          <div class="steps" style="border:none;padding:0;margin:0"><ol>${r.q.steps.map(s=>`<li><span>${s}</span></li>`).join('')}</ol></div>
+        </div>
+      </div>`).join('')}
+    <div class="nextrow">
+      <button class="btn primary" id="again">Run it again</button>
+      <button class="btn ghost" id="toStats">Stats</button>
+    </div>`;
+  $$('.rhead').forEach(h=>h.onclick=()=>$('#rb'+h.dataset.i).classList.toggle('hidden'));
+  $('#again').onclick=()=>{ T=null; startTest(); };
+  $('#toStats').onclick=()=>nav('stats');
+  window.scrollTo({top:0});
+}
+
+/* ---------- stats ---------- */
+function renderStats(){
+  const totA=Object.values(S.stats).reduce((a,s)=>a+s.a,0);
+  const totC=Object.values(S.stats).reduce((a,s)=>a+s.c,0);
+  const slips=Object.entries(S.slips).sort((a,b)=>b[1]-a[1]);
+  view.innerHTML=`
+    <div class="statgrid">
+      <div class="stat"><div class="n">${totA}</div><div class="l">questions</div></div>
+      <div class="stat"><div class="n">${totA?Math.round(totC/totA*100):0}%</div><div class="l">lifetime accuracy</div></div>
+      <div class="stat"><div class="n">${S.best}</div><div class="l">best streak</div></div>
+    </div>
+    <h2 class="sec">Mastery by category <span style="text-transform:none;letter-spacing:0">(last 20 attempts)</span></h2>
+    ${Object.entries(CATS).map(([k,c])=>{
+      const st=S.stats[k], m=mastery(k);
+      return `<div class="catstat">
+        <div class="top">${c.icon} ${c.name}<span class="m m${m.lv}">${m.txt}${st.a>=8?` · ${m.pct}%`:''}</span></div>
+        <div class="bar"><i style="width:${st.a?m.pct:0}%"></i></div>
+        <div class="sub">${st.a} attempted · ${st.c} correct${st.a<8?` · ${8-st.a} more to rate mastery`:''}</div>
+      </div>`;
+    }).join('')}
+    ${slips.length?`<h2 class="sec">Your slip patterns — drill these</h2>
+      <ul class="sliplist">${slips.map(([k,n])=>`<li>⚠️ ${SLIPS[k]||k}<b>×${n}</b></li>`).join('')}</ul>`:''}
+    ${S.tests.length?`<h2 class="sec">Test history</h2>
+      ${S.tests.map(t=>`<div class="histrow"><span>${t.d}</span><span class="sc">${t.score}%</span><span>(${t.n} q)</span><span class="pf ${t.pass?'p':'f'}">${t.pass?'PASS':'FAIL'}</span></div>`).join('')}`:''}
+    <div class="nextrow" style="margin-top:22px">
+      <button class="btn ghost danger" id="reset">Reset all progress</button>
+    </div>`;
+  $('#reset').onclick=()=>{ if(confirm('Wipe all stats, slips and test history?')){ localStorage.removeItem(KEY); S=load(); save(); renderStats(); } };
+}
+
+/* ---------- formulas modal ---------- */
+$('#btnFormulas').onclick=()=>{
+  $('#sheet').innerHTML=`
+    <button class="close" id="mclose">✕</button>
+    <h3>∑ Formula sheet</h3>
+    <div class="fcard"><div class="fn">Unit ladder</div><div class="fx"><code>g × 1000 → mg × 1000 → mcg</code><small>Going down = × 1000. Going up = ÷ 1000. Always convert so dose and stock share a unit BEFORE any formula.</small></div></div>
+    <div class="fcard"><div class="fn">Tablets / capsules</div><div class="fx"><code>dose required ÷ stock strength</code><small>Capsules can never be halved.</small></div></div>
+    <div class="fcard"><div class="fn">Liquids &amp; injections</div><div class="fx"><code>(dose required ÷ stock strength) × stock volume</code><small>"What you want over what you've got, times what it's in."</small></div></div>
+    <div class="fcard"><div class="fn">Pump rate</div><div class="fx"><code>mL/hr = volume ÷ time (hours)</code><small>If time is in minutes: (volume ÷ minutes) × 60.</small></div></div>
+    <div class="fcard"><div class="fn">Drip rate (no pump)</div><div class="fx"><code>drops/min = (volume × drop factor) ÷ time (minutes)</code><small>Standard giving set = 20 drops/mL · microdrip / burette = 60 drops/mL. Round to the nearest whole drop.</small></div></div>
+    <div class="fcard"><div class="fn">Infusion time</div><div class="fx"><code>time (hours) = volume ÷ rate</code></div></div>
+    <div class="fcard"><div class="fn">Weight-based</div><div class="fx"><code>dose = mg/kg × weight</code><small>If charted mg/kg/DAY in divided doses: work out the day total first, then ÷ number of doses.</small></div></div>
+    <div class="fcard"><div class="fn">The golden habit</div><div class="fx">Sense-check every answer: more than 4 tablets, more than 10 mL IM, or a wildly fast rate = <b>stop and re-check</b>. Decimal-place errors are the ones that reach patients.</div></div>`;
+  $('#modal').classList.remove('hidden');
+  $('#mclose').onclick=closeModal;
+};
+function closeModal(){ $('#modal').classList.add('hidden'); }
+$('#modal').onclick=e=>{ if(e.target.id==='modal') closeModal(); };
+
+/* ---------- theme ---------- */
+function applyTheme(){ document.documentElement.setAttribute('data-theme',S.theme); }
+$('#btnTheme').onclick=()=>{ S.theme=S.theme==='dark'?'light':'dark'; save(); applyTheme(); };
+applyTheme();
+
+/* ---------- go ---------- */
+renderDrill(true);
+</script>
+</body>
+</html>
