@@ -294,7 +294,7 @@ const TABS=[
   ['spironolactone',25,'mg','tablet'],['allopurinol',100,'mg','tablet'],['erythromycin',250,'mg','tablet'],
   ['digoxin',250,'mcg','tablet'],['digoxin',62.5,'mcg','tablet'],
   ['levothyroxine',50,'mcg','tablet'],['levothyroxine',100,'mcg','tablet'],
-  ['amoxicillin',250,'mg','capsule'],['amoxicillin',500,'mg','capsule'],['cephalexin',500,'mg','capsule'],
+  ['amoxicillin',250,'mg','capsule'],['amoxicillin',500,'mg','capsule'],['cefalexin',500,'mg','capsule'],
 ];
 function gTab(){
   const [drug,S0,unit,form]=rnd(TABS);
@@ -324,8 +324,8 @@ function gTab(){
 
 const LIQS=[
   ['paracetamol',120,5],['paracetamol',250,5],['amoxicillin',125,5],['amoxicillin',250,5],
-  ['ibuprofen',100,5],['cephalexin',125,5],['erythromycin',200,5],['phenoxymethylpenicillin',125,5],
-  ['morphine elixir',1,1],['ondansetron syrup',4,5],
+  ['ibuprofen',100,5],['cefalexin',125,5],['erythromycin',200,5],['phenoxymethylpenicillin',125,5],
+  ['morphine elixir',1,1],['prednisolone oral solution',5,1],
 ];
 function gLiq(){
   for(let i=0;i<50;i++){
@@ -464,7 +464,7 @@ const WT_SIMPLE=[ // [drug, mg/kg, weights[]]
 ];
 const WT_DIV=[ // [drug, mg/kg/day, doses/day, weights[]]
   ['amoxicillin',25,3,[12,15,18,24,30,36]],
-  ['cephalexin',25,4,[16,20,24,32,40]],
+  ['cefalexin',25,4,[16,20,24,32,40]],
   ['cefuroxime',20,2,[9,12,15,18,21]],
   ['erythromycin',40,4,[10,15,20,25]],
 ];
@@ -594,7 +594,7 @@ function renderDrill(newQ){
   const inp=$('#ans');
   inp.focus();
   $('#check').onclick=checkDrill;
-  inp.onkeydown=e=>{ if(e.key==='Enter'){ answered ? renderDrill(true) : checkDrill(); } };
+  inp.onkeydown=e=>{ if(e.key==='Enter'&&!answered) checkDrill(); };
 }
 function checkDrill(){
   if(answered) return;
@@ -615,8 +615,13 @@ function checkDrill(){
     <div class="nextrow"><button class="btn primary" id="next">Next question ↵</button></div>`;
   $('#next').onclick=()=>renderDrill(true);
   $('#next').focus();
-  document.onkeydown=e=>{ if(answered&&e.key==='Enter'&&VIEW==='drill'){ document.onkeydown=null; renderDrill(true);} };
 }
+/* single delegated Enter-to-advance — no per-render document handler juggling */
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Enter'||VIEW!=='drill'||!answered) return;
+  e.preventDefault();
+  renderDrill(true);
+});
 
 /* ---------- test mode ---------- */
 function renderTestSetup(){
