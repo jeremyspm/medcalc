@@ -203,6 +203,10 @@ h2.sec{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--tx
 
 <div id="modal" class="modal hidden"><div class="sheet" id="sheet"></div></div>
 
+<!-- Optional cloud sync: dormant unless signed in at jeremyspm.github.io. Fully offline-first without it. -->
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://jeremyspm.github.io/cloud/config.js"></script>
+<script src="https://jeremyspm.github.io/cloud/cloud.js"></script>
 <script>
 'use strict';
 /* ============================== utils ============================== */
@@ -241,6 +245,7 @@ const SLIPS={
   stopped:'Stopped one step early',
 };
 let S=load();
+if(window.Cloud) Cloud.sync([KEY]);   // syncs drill stats across devices when signed in; no-op otherwise
 function load(){
   const stats={}; Object.keys(CATS).forEach(c=>stats[c]={a:0,c:0,last:[]});
   const def={theme:'dark',stats,slips:{},streak:0,best:0,tests:[],cat:'all',tn:10,tt:0,tp:100};
