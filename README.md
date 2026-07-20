@@ -2,8 +2,9 @@
 
 Single-file, 100% offline drug-calculation trainer built for the BN med-calc gate.
 Open `index.html` in any browser (or publish the folder on GitHub Pages). No AI,
-no network, no dependencies — every question is **procedurally generated** with a
-fully worked solution, so the question bank never runs out.
+no dependencies, works fully offline (the optional hub cloud-sync scripts no-op
+when unreachable or signed out) — every question is **procedurally generated**
+with a fully worked solution, so the question bank never runs out.
 
 ## What it does
 
@@ -33,5 +34,14 @@ fully worked solution, so the question bank never runs out.
   (drip rates / pump rates), where the question says how to round.
 - Capsule questions never require half a capsule.
 
+## Maintaining it
+
+After any edit to the generators or drug pools, run `node audit.js` — it
+generates 300k questions and re-solves each one from the displayed text,
+catching display-rounding corruption, unit slips, and grading drift. It must
+report zero mismatches before pushing.
+
 This is a practice tool, not a clinical reference — always follow your
-programme's formulary and local policy in practice.
+programme's formulary and local policy in practice. Rounding rules and the
+test-mode format follow common NZ teaching; verify them against your own
+course workbook and gate rules.

@@ -215,7 +215,8 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const rnd=a=>a[Math.floor(Math.random()*a.length)];
 const chance=p=>Math.random()<p;
 const near=(a,b,t)=>Math.abs(a-b)<=(t!=null?t:Math.max(Math.abs(b)*0.005,0.0005));
-function fmt(n){ if(!isFinite(n))return'—'; const r=Math.round(n*1000)/1000; return String(parseFloat(r.toFixed(3))); }
+/* 4 dp so pool values like 0.0625 mg / 62.5 micrograms display exactly — 3 dp corrupted them */
+function fmt(n){ if(!isFinite(n))return'—'; const r=Math.round(n*10000)/10000; return String(parseFloat(r.toFixed(4))); }
 /* NZ (HQSC) convention: write "microgram" in full — mcg/µg are error-prone abbreviations */
 const uw=u=>u==='mcg'?'micrograms':u;      // noun: "250 micrograms"
 const uwa=u=>u==='mcg'?'microgram':u;      // adjective: "250 microgram tablets"
@@ -290,21 +291,21 @@ function gConv(){
     ], traps};
 }
 
-const TABS=[
-  ['paracetamol',500,'mg','tablet'],['ibuprofen',200,'mg','tablet'],
+const TABS=[ // [drug, strength, unit, form, max sensible single dose (same unit) — omit if any multiple is fine]
+  ['paracetamol',500,'mg','tablet',1000],['ibuprofen',200,'mg','tablet'],
   ['furosemide',40,'mg','tablet'],['furosemide',20,'mg','tablet'],
   ['prednisone',5,'mg','tablet'],['prednisone',20,'mg','tablet'],
-  ['metformin',500,'mg','tablet'],['aspirin',100,'mg','tablet'],['aspirin',300,'mg','tablet'],
-  ['codeine',30,'mg','tablet'],['codeine',15,'mg','tablet'],
+  ['metformin',500,'mg','tablet',1000],['aspirin',100,'mg','tablet'],['aspirin',300,'mg','tablet'],
+  ['codeine',30,'mg','tablet',60],['codeine',15,'mg','tablet',60],
   ['warfarin',2,'mg','tablet'],['warfarin',5,'mg','tablet'],
-  ['spironolactone',25,'mg','tablet'],['allopurinol',100,'mg','tablet'],['erythromycin',250,'mg','tablet'],
-  ['digoxin',250,'mcg','tablet'],['digoxin',62.5,'mcg','tablet'],
+  ['spironolactone',25,'mg','tablet'],['allopurinol',100,'mg','tablet'],['erythromycin',400,'mg','tablet',800],
+  ['digoxin',250,'mcg','tablet',500],['digoxin',62.5,'mcg','tablet'],
   ['levothyroxine',50,'mcg','tablet'],['levothyroxine',100,'mcg','tablet'],
-  ['amoxicillin',250,'mg','capsule'],['amoxicillin',500,'mg','capsule'],['cefalexin',500,'mg','capsule'],
+  ['amoxicillin',250,'mg','capsule',1000],['amoxicillin',500,'mg','capsule',1000],['cefalexin',500,'mg','capsule',1000],
 ];
 function gTab(){
-  const [drug,S0,unit,form]=rnd(TABS);
-  const A=rnd(form==='capsule'?[1,2,3]:[0.5,1,1.5,2,3]);
+  const [drug,S0,unit,form,maxD]=rnd(TABS);
+  const A=rnd((form==='capsule'?[1,2,3]:[0.5,1,1.5,2,3]).filter(a=>!maxD||S0*a<=maxD));
   const ordered=S0*A;
   let doseTxt=`${fmt(ordered)} ${uw(unit)}`, convStep=null;
   const traps=[];
@@ -355,21 +356,22 @@ function gLiq(){
   return gTab();
 }
 
-const INJS=[ // [drug, strength, per mL(s), unit, route]
+const INJS=[ // [drug, strength, per mL(s), unit, route, max sensible single dose (same unit) — omit if any multiple is fine]
   ['morphine',10,1,'mg','subcutaneously'],['metoclopramide',10,2,'mg','IM'],
   ['furosemide',20,2,'mg','IV'],['ondansetron',4,2,'mg','IV'],
   ['hydrocortisone',100,2,'mg','IV'],['gentamicin',80,2,'mg','IV'],
-  ['enoxaparin',100,1,'mg','subcutaneously'],['heparin',5000,1,'units','subcutaneously'],
-  ['ceftriaxone',1000,10,'mg','IV'],['naloxone',0.4,1,'mg','IV'],
-  ['atropine',0.6,1,'mg','IV'],['digoxin',500,2,'mcg','IV'],
+  ['enoxaparin',100,1,'mg','subcutaneously',150],['heparin',5000,1,'units','subcutaneously'],
+  ['ceftriaxone',1000,10,'mg','IV'],['naloxone',400,1,'mcg','IV'],
+  ['atropine',600,1,'mcg','IV',1200],['digoxin',500,2,'mcg','IV',500],
 ];
 function gInj(){
   for(let i=0;i<80;i++){
-    const [drug,S0,V,unit,route]=rnd(INJS);
+    const [drug,S0,V,unit,route,maxD]=rnd(INJS);
     const k=rnd([0.25,0.5,0.75,1,1.25,1.5,2,2.5,3]);
     const ordered=S0*k, ans=V*k;
     const maxV=V>=10?10:3;
     if(ans>maxV||ans<0.2) continue;
+    if(maxD && ordered>maxD) continue;
     if(unit==='units' && Math.round(ordered)!==ordered) continue;
     if(Math.round(ordered*100)/100!==ordered) continue;  // dose ≤ 2 dp
     if(unit!=='units' && S0>=1 && Math.round(ordered*2)!==ordered*2) continue; // most doses to 0.5
@@ -388,7 +390,8 @@ function gInj(){
 }
 
 const FLUIDS=['0.9% sodium chloride',"compound sodium lactate (Hartmann's)",'5% glucose','0.45% sodium chloride with 5% glucose'];
-const MINIBAG=['cefazolin 1 g','vancomycin 500 mg','potassium chloride 10 mmol','metronidazole 500 mg'];
+const MINIBAG=[ // [additive, minimum sensible infusion minutes — keeps drug/duration pairings clinically plausible]
+  ['cefazolin 1 g',15],['vancomycin 500 mg',60],['potassium chloride 10 mmol',60],['metronidazole 500 mg',20]];
 const RATE_H=[[1000,8],[1000,10],[1000,4],[1000,12],[1000,6],[1000,24],[500,4],[500,2],[500,6],[500,8],[250,2],[250,4]];
 const RATE_M=[[100,30],[100,20],[100,15],[50,30],[50,15],[250,30],[200,60],[150,30],[100,60]];
 function gRate(){
@@ -404,9 +407,10 @@ function gRate(){
       ], traps};
   } else {
     const [v,m]=rnd(RATE_M), exact=v/m*60, ans=Math.round(exact);
+    const bag=rnd(MINIBAG.filter(b=>m>=b[1]))[0];
     const traps=[{v:v/m, slip:'time', msg:`that's mL per <b>minute</b>. Multiply by 60 to get mL per <b>hour</b> — pumps are set in mL/hr.`}];
     return {cat:'rate',
-      prompt:`${rnd(NAMES)} has <b>${rnd(MINIBAG)}</b> in <b>${fmt(v)} mL</b> to run over <b>${fmt(m)} minutes</b> via pump. What rate in mL/hr will you set?`,
+      prompt:`${rnd(NAMES)} has <b>${bag}</b> in <b>${fmt(v)} mL</b> to run over <b>${fmt(m)} minutes</b> via pump. What rate in mL/hr will you set?`,
       unit:'mL/hr', answer:ans, exact, tol:0, steps:[
         `Rate (mL/hr) = (volume ÷ minutes) × 60`,
         `= (${fmt(v)} ÷ ${fmt(m)}) × 60 = <em>${fmt(exact)} mL/hr</em>`,
@@ -624,7 +628,7 @@ function checkDrill(){
 }
 /* single delegated Enter-to-advance — no per-render document handler juggling */
 document.addEventListener('keydown',e=>{
-  if(e.key!=='Enter'||VIEW!=='drill'||!answered) return;
+  if(e.key!=='Enter'||VIEW!=='drill'||!answered||!$('#modal').classList.contains('hidden')) return;
   e.preventDefault();
   renderDrill(true);
 });
@@ -657,14 +661,20 @@ function startTest(){
   for(let i=qs.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [qs[i],qs[j]]=[qs[j],qs[i]]; }
   T={live:true,qs,i:0,ua:[],end:S.tt? Date.now()+S.tt*60000 : null,timer:null};
   renderTestQ();
-  if(T.end){ T.timer=setInterval(()=>{
+}
+/* (re)armed on every question render so the countdown survives navigating away and back mid-test */
+function armTimer(){
+  if(!T||!T.end) return;
+  clearInterval(T.timer);
+  const tick=()=>{
     const el=$('#ttimer'); if(!el){clearInterval(T.timer);return;}
     const left=T.end-Date.now();
     if(left<=0){ finishTest(); return; }
     const m=Math.floor(left/60000), s=Math.floor(left%60000/1000);
     el.textContent=`${m}:${String(s).padStart(2,'0')}`;
     el.classList.toggle('low',left<60000);
-  },250); }
+  };
+  T.timer=setInterval(tick,250); tick();
 }
 function renderTestQ(){
   const q=T.qs[T.i];
@@ -683,6 +693,7 @@ function renderTestQ(){
       </div>
     </div>
     <div class="nextrow"><button class="btn ghost danger" id="abort">Abandon test</button></div>`;
+  armTimer();
   const inp=$('#ans'); inp.focus();
   const submit=()=>{
     const raw=inp.value.trim().replace(',','.');
@@ -775,7 +786,7 @@ $('#btnFormulas').onclick=()=>{
     <div class="fcard"><div class="fn">Drip rate (no pump)</div><div class="fx"><code>drops/min = (volume × drop factor) ÷ time (minutes)</code><small>Standard giving set = 20 drops/mL · microdrip / burette = 60 drops/mL. Round to the nearest whole drop.</small></div></div>
     <div class="fcard"><div class="fn">Infusion time</div><div class="fx"><code>time (hours) = volume ÷ rate</code></div></div>
     <div class="fcard"><div class="fn">Weight-based</div><div class="fx"><code>dose = mg/kg × weight</code><small>If charted mg/kg/DAY in divided doses: work out the day total first, then ÷ number of doses.</small></div></div>
-    <div class="fcard"><div class="fn">The golden habit</div><div class="fx">Sense-check every answer: more than 4 tablets, more than 10 mL IM, or a wildly fast rate = <b>stop and re-check</b>. Decimal-place errors are the ones that reach patients.</div></div>`;
+    <div class="fcard"><div class="fn">The golden habit</div><div class="fx">Sense-check every answer: more than 4 tablets, more than 3 mL into one IM site, or a wildly fast rate = <b>stop and re-check</b>. Decimal-place errors are the ones that reach patients.</div></div>`;
   $('#modal').classList.remove('hidden');
   $('#mclose').onclick=closeModal;
 };
