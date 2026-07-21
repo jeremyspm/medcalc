@@ -113,6 +113,24 @@ html[data-theme="light"] .fb .slip{background:rgba(255,255,255,.55)}
 .drillbar{display:flex;align-items:center;gap:10px;margin-bottom:12px;font-size:13px;color:var(--tx2);flex-wrap:wrap}
 .drillbar .pill{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:20px;background:var(--card);border:1px solid var(--line);font-weight:700}
 .drillbar .pill.hot{border-color:rgba(255,140,60,.5);color:#ffb073}
+.drillbar .pill.toggle{cursor:pointer;border-style:dashed;transition:.12s}
+.drillbar .pill.toggle:hover{color:var(--tx);border-color:var(--line2)}
+.drillbar .pill.toggle.on{background:var(--acc);color:#04231d;border-color:var(--acc);border-style:solid}
+
+/* Estimate-first mode */
+.estblock{margin-top:18px}
+.estq{font-size:15px;font-weight:700;margin-bottom:11px}
+.estq span{display:block;font-weight:500;color:var(--tx3);font-size:12.5px;margin-top:2px}
+.estpills{display:flex;gap:8px;flex-wrap:wrap}
+.estpill{flex:1 1 100px;min-width:100px;display:flex;flex-direction:column;align-items:flex-start;gap:2px;background:var(--card2);border:1.5px solid var(--line2);border-radius:12px;padding:11px 13px;text-align:left;transition:.12s}
+.estpill:hover{border-color:var(--acc);background:var(--card)}
+.estpill b{font-size:14.5px;color:var(--tx)}
+.estpill span{font-size:11.5px;color:var(--tx3);font-variant-numeric:tabular-nums}
+.estchosen{margin:16px 0 2px;display:inline-flex;align-items:center;gap:8px;background:rgba(47,208,181,.12);border:1px solid rgba(47,208,181,.3);border-radius:20px;padding:6px 13px;font-size:13px;font-weight:700;color:var(--acc)}
+.estchosen b{color:var(--tx)}
+.estchosen span{color:var(--tx3);font-weight:600}
+.fb .estfb{margin-top:9px;padding:10px 12px;border-radius:9px;background:rgba(47,208,181,.1);border:1px solid rgba(47,208,181,.25);font-size:13.5px;line-height:1.5;color:var(--tx)}
+.fb .estfb b{color:var(--acc)}
 
 /* Test setup + run */
 .setup h3{margin:0 0 4px;font-size:18px}
@@ -222,6 +240,28 @@ const uw=u=>u==='mcg'?'micrograms':u;      // noun: "250 micrograms"
 const uwa=u=>u==='mcg'?'microgram':u;      // adjective: "250 microgram tablets"
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 const NAMES=['Aroha','Wiremu','Hemi','Mere','Tane','Nikau','Moana','Sione','Losa','Mei','Chen','Yuki','Raj','Priya','Anika','Fatima','Omar','Grace','Noah','Ella','Jack','Olivia','Sam','Ruby','Leo','Isla'];
+/* magnitude tiers for Estimate-first mode — decade buckets, so a 10× decimal
+   slip always lands in a different bucket than the true answer */
+const MAGTIERS=[
+  [0,0.1,'tiny','under 0.1'],
+  [0.1,1,'a fraction','0.1–1'],
+  [1,10,'single digits','1–10'],
+  [10,100,'tens','10–100'],
+  [100,1000,'hundreds','100–1000'],
+  [1000,10000,'thousands','1000–10000'],
+  [10000,Infinity,'huge','10000+'],
+];
+function tierIndex(v){ v=Math.abs(v); for(let i=0;i<MAGTIERS.length;i++){ if(v<MAGTIERS[i][1]) return i; } return MAGTIERS.length-1; }
+/* 3 ascending decade options bracketing the true answer; correct position varies
+   so the decoys are exactly the ×10 / ÷10 decimal-slip magnitudes */
+function buildEstOpts(ans){
+  const ct=tierIndex(ans);
+  const p=Math.floor(Math.random()*3);
+  const start=Math.max(0,Math.min(ct-p,MAGTIERS.length-3));
+  const opts=[];
+  for(let i=start;i<start+3;i++){ const t=MAGTIERS[i]; opts.push({name:t[2],range:t[3],gi:i}); }
+  return {opts};
+}
 
 /* ============================== state ============================== */
 const KEY='medcalcdrill.v1';
@@ -250,7 +290,7 @@ let S=load();
 if(window.Cloud) Cloud.sync([KEY]);   // syncs drill stats across devices when signed in; no-op otherwise
 function load(){
   const stats={}; Object.keys(CATS).forEach(c=>stats[c]={a:0,c:0,last:[]});
-  const def={theme:'dark',stats,slips:{},streak:0,best:0,tests:[],cat:'all',tn:10,tt:0,tp:100};
+  const def={theme:'dark',stats,slips:{},streak:0,best:0,tests:[],cat:'all',tn:10,tt:0,tp:100,est:false};
   try{ const s=JSON.parse(localStorage.getItem(KEY));
     if(s&&s.stats){
       // migration guard: categories added in later versions get fresh stats
@@ -562,7 +602,7 @@ function mastery(cat){
 }
 
 /* ============================== views ============================== */
-let VIEW='drill', Q=null, answered=false;
+let VIEW='drill', Q=null, answered=false, estPick=null;
 let T=null; // test run state
 const view=$('#view');
 
@@ -583,28 +623,48 @@ function chipRow(){
     return `<button class="chip ${S.cat===k?'on':''}" data-c="${k}"><i class="mdot m${m.lv}"></i>${c.icon} ${c.name}</button>`;
   }).join('')}</div>`;
 }
+function estimateBlock(){
+  return `<div class="estblock">
+      <div class="estq">First — how big will the answer be?<span>trust your gut, then calculate</span></div>
+      <div class="estpills">${Q.est.opts.map((o,i)=>`<button class="estpill" data-e="${i}"><b>${o.name}</b><span>${o.range} ${esc(Q.unit)}</span></button>`).join('')}</div>
+    </div>`;
+}
+function estimateChosen(){
+  const o=Q.est.opts[estPick];
+  return `<div class="estchosen">🎯 Your estimate: <b>${o.name}</b> <span>${o.range} ${esc(Q.unit)}</span></div>`;
+}
 function renderDrill(newQ){
-  if(newQ||!Q) { Q=makeQ(S.cat); answered=false; }
+  if(newQ||!Q) { Q=makeQ(S.cat); answered=false; estPick=null; }
+  if(S.est && !Q.est) Q.est=buildEstOpts(Q.answer);
+  const estPhase = S.est && estPick===null && !answered;
   view.innerHTML=`
     <div class="drillbar">
       <span class="pill ${S.streak>=5?'hot':''}">🔥 streak <b>${S.streak}</b></span>
       <span class="pill">🏆 best <b>${S.best}</b></span>
+      <button class="pill toggle ${S.est?'on':''}" id="estToggle" title="Commit to the answer's size before you calculate — trains the reflex that catches decimal-place slips">🎯 Estimate first${S.est?' · on':''}</button>
     </div>
     ${chipRow()}
     <div class="card">
       <div class="cmeta"><span class="tag acc">${CATS[Q.cat].icon} ${CATS[Q.cat].name}</span><span class="tag right">drill</span></div>
       <div class="q">${Q.prompt}</div>
-      <div class="ansrow">
+      ${estPhase?estimateBlock():''}
+      ${S.est&&estPick!==null?estimateChosen():''}
+      ${estPhase?'':`<div class="ansrow">
         <div class="ansbox"><input id="ans" type="text" inputmode="decimal" autocomplete="off" placeholder="answer"/><span class="unit">${esc(Q.unit)}</span></div>
         <button class="btn primary" id="check">Check</button>
-      </div>
+      </div>`}
       <div id="fb"></div>
     </div>`;
   $$('.chip').forEach(b=>b.onclick=()=>{S.cat=b.dataset.c;save();renderDrill(true);});
-  const inp=$('#ans');
-  inp.focus();
-  $('#check').onclick=checkDrill;
-  inp.onkeydown=e=>{ if(e.key==='Enter'&&!answered) checkDrill(); };
+  $('#estToggle').onclick=()=>{ S.est=!S.est; save(); estPick=null; answered=false; renderDrill(false); };
+  if(estPhase){
+    $$('.estpill').forEach(b=>b.onclick=()=>{ estPick=+b.dataset.e; renderDrill(false); });
+  } else {
+    const inp=$('#ans');
+    inp.focus();
+    $('#check').onclick=checkDrill;
+    inp.onkeydown=e=>{ if(e.key==='Enter'&&!answered) checkDrill(); };
+  }
 }
 function checkDrill(){
   if(answered) return;
@@ -614,12 +674,28 @@ function checkDrill(){
   const g=grade(Q,u);
   answered=true;
   recordDrill(Q.cat,g.ok,g.slip);
+  let estNote='';
+  if(S.est && estPick!==null && Q.est){
+    const picked=Q.est.opts[estPick], trueTier=tierIndex(Q.answer), typedTier=tierIndex(u);
+    if(g.ok){
+      estNote = picked.gi===trueTier
+        ? `🎯 <b>Estimate on point.</b> You sized it up before calculating — that's the instinct that catches decimal-place slips at the bedside.`
+        : `Right answer — but your size estimate (<b>${MAGTIERS[picked.gi][2]}</b>) was off; it lands in <b>${MAGTIERS[trueTier][2]}</b>. Worth clocking that gap.`;
+    } else if(typedTier!==picked.gi){
+      estNote = `🎯 <b>Your own estimate flagged this.</b> You guessed <b>${picked.name}</b> (${picked.range}) but entered ${fmt(u)} — that clash between gut and answer is exactly when to stop and re-check.`;
+    } else if(picked.gi===trueTier){
+      estNote = `Your ballpark (<b>${picked.name}</b>) was right — the slip was in the arithmetic, not the size. Fix the step and trust the estimate.`;
+    } else {
+      estNote = `Both your estimate and your answer landed in <b>${picked.name}</b>, but the real size is <b>${MAGTIERS[trueTier][2]}</b> — recalibrate your feel for this one.`;
+    }
+  }
   const fb=$('#fb');
   fb.innerHTML=`
     <div class="fb ${g.ok?'ok':(g.near?'near':'no')}">
       <div class="h">${g.ok?`✅ Correct — ${fmt(Q.answer)} ${esc(Q.unit)}`:(g.near?`⚠️ So close`:`❌ Not quite — it's ${fmt(Q.answer)} ${esc(Q.unit)}`)}</div>
       ${g.ok&&S.streak>0&&S.streak%10===0?`<div>🔥 ${S.streak} in a row. That's gate-passing form.</div>`:''}
       ${g.msg?`<div class="slip">💡 <b>Spotted your slip:</b> ${g.msg}</div>`:''}
+      ${estNote?`<div class="estfb">${estNote}</div>`:''}
     </div>
     <div class="steps"><div class="lab">Worked solution</div><ol>${Q.steps.map(s=>`<li><span>${s}</span></li>`).join('')}</ol></div>
     <div class="nextrow"><button class="btn primary" id="next">Next question ↵</button></div>`;
@@ -786,7 +862,7 @@ $('#btnFormulas').onclick=()=>{
     <div class="fcard"><div class="fn">Drip rate (no pump)</div><div class="fx"><code>drops/min = (volume × drop factor) ÷ time (minutes)</code><small>Standard giving set = 20 drops/mL · microdrip / burette = 60 drops/mL. Round to the nearest whole drop.</small></div></div>
     <div class="fcard"><div class="fn">Infusion time</div><div class="fx"><code>time (hours) = volume ÷ rate</code></div></div>
     <div class="fcard"><div class="fn">Weight-based</div><div class="fx"><code>dose = mg/kg × weight</code><small>If charted mg/kg/DAY in divided doses: work out the day total first, then ÷ number of doses.</small></div></div>
-    <div class="fcard"><div class="fn">The golden habit</div><div class="fx">Sense-check every answer: more than 4 tablets, more than 3 mL into one IM site, or a wildly fast rate = <b>stop and re-check</b>. Decimal-place errors are the ones that reach patients.</div></div>`;
+    <div class="fcard"><div class="fn">The golden habit</div><div class="fx">Sense-check every answer: more than 4 tablets, more than 3 mL into one IM site, or a wildly fast rate = <b>stop and re-check</b>. Decimal-place errors are the ones that reach patients.<small>Build the reflex: switch on <b>🎯 Estimate first</b> in Drill — you commit to the answer's <i>size</i> before you calculate, so a decimal slip clashes with your own gut.</small></div></div>`;
   $('#modal').classList.remove('hidden');
   $('#mclose').onclick=closeModal;
 };
