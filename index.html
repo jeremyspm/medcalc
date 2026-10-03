@@ -441,12 +441,13 @@ const SLIPS={
   order:'Calculator order (top & bottom first, add first)',
   dilution:'Dilution — didn’t add the volumes first',
   redherring:'Used a red herring (bottle size, %, how often)',
+  nounit:'Left the unit off a number',
 };
 let S=load();
 if(window.Cloud) Cloud.sync([KEY]);   // syncs progress across devices when signed in; no-op otherwise
 function load(){
   const stats={}; Object.keys(CATS).forEach(c=>stats[c]={a:0,c:0,last:[]});
-  const def={theme:'dark',stats,slips:{},streak:0,best:0,tests:[],cat:'all',est:false,fill:false,mt:30,learn:{}};
+  const def={theme:'dark',stats,slips:{},streak:0,best:0,tests:[],cat:'all',est:false,mt:30,learn:{}};
   try{ const s=JSON.parse(localStorage.getItem(KEY));
     if(s&&s.stats){
       // migration guard: categories added in later versions get fresh stats
@@ -500,6 +501,7 @@ const UALIAS={mg:'mg',mgs:'mg',milligram:'mg',milligrams:'mg',
   min:'mins',mins:'mins',minute:'mins',minutes:'mins',
   drops:'drops',drop:'drops',gtt:'drops',gtts:'drops',
   'drops/min':'drops/min','drop/min':'drops/min','gtt/min':'drops/min','gtts/min':'drops/min',dpm:'drops/min','drops/minute':'drops/min',
+  'ml/hr':'mL/hr','ml/h':'mL/hr','ml/hrs':'mL/hr','ml/hour':'mL/hr','ml/hours':'mL/hr','mls/hr':'mL/hr','mls/hour':'mL/hr','mlhr':'mL/hr',
   units:'units',unit:'units',u:'units',iu:'units',
   doses:'doses',dose:'doses'};
 function normUnit(s){
@@ -525,18 +527,21 @@ const TK={
   x:s=>({t:'x',s}),                                   // fixed text (1000, 60, words)
 };
 const LAB={w0:'charted',w:'want',g0:'stock',g:'got',v:'volume',a:'answer',pk:'per kg',kg:'weight',d:'dose',d2:'dose',dd:'day total',n:'doses',
-  av:'ampoule',dv:'water',tot:'total',top:'drops',bot:'mins',raw:'top ÷ bottom',df:'drop factor',h:'hours',v0:'ordered',c0:'amount'};
+  av:'ampoule',dv:'water',tot:'total',top:'drops',bot:'mins',raw:'top ÷ bottom',df:'drop factor',h:'hours',v0:'ordered',c0:'amount',
+  vi:'volume',r:'rate',mi:'mins'};
 const BOXHINT={w:'WANT = what’s charted (converted if the units differ).',w0:'Copy what’s charted, exactly as written.',g:'GOT = what’s in stock (converted if the units differ).',g0:'Copy the stock strength, exactly as written.',
   v:'VOLUME = what one lot of the GOT comes in.',a:'Re-do the sum on the calculator.',pk:'The dose per kg from the order.',kg:'The patient’s weight.',d:'mg/kg × kg.',d2:'The dose you just worked out — now it’s the WANT.',dd:'kg × mg/kg/day.',
   n:'How many doses the day is split into.',av:'The ampoule’s volume.',dv:'The water you add.',tot:'Ampoule mL + water mL.',top:'Volume × drop factor.',bot:'Hours × 60.',
-  raw:'Top ÷ bottom.',df:'Drops per mL from the giving set.',h:'The hours it runs over.',v0:'The volume exactly as the order writes it.',c0:'The amount to convert.'};
+  raw:'Top ÷ bottom.',df:'Drops per mL from the giving set.',h:'The hours it runs over.',v0:'The volume exactly as the order writes it.',c0:'The amount to convert.',
+  vi:'The volume to run in (mL).',r:'The rate it’s running at (mL/hr).',mi:'The minutes it runs over.'};
 /* what a picked number IS, for "that's not it" feedback */
 const ROLE={w:'what’s charted — what you WANT',g:'what’s in stock — what you’ve GOT',v:'the volume the stock comes in',
   freq:'HOW OFTEN it’s given — a red herring for a single dose',kg:'the patient’s weight',pk:'the dose per kg',
   df:'the drop factor (drops per mL)',t:'the time it runs over',iv:'the volume of fluid to run in',
   fluid:'what’s in the bag — a red herring for drip rates',total:'the bottle’s total volume after mixing — a red herring',
   water:'the water you add — a red herring once it’s mixed',av:'the ampoule’s volume',dv:'the water you add in the syringe',
-  ratio:'the ratio — it tells you the strength, not the dose',n:'how many doses the day is split into',c0:'the amount to convert'};
+  ratio:'the ratio — it tells you the strength, not the dose',n:'how many doses the day is split into',c0:'the amount to convert',
+  r:'the rate it’s running at (mL/hr)',drug:'the drug in the bag — it doesn’t change the rate'};
 
 function PB(){ const chips=[]; return {chips, sp:(r,t)=>{ chips.push({r,t}); return `<span class="qx" data-r="${r}">${esc(t)}</span>`; }}; }
 function finish(q){
@@ -771,6 +776,78 @@ function buildConv(o){
   ];
   return finish({cat:'conv',prompt:o.prompt||'',chips:o.chips||[],lines,steps:S,answer:ans,exact:ans,unit:to,aU:to,traps,
     sense:`${qs(ans,to)} — going ${down?'down':'up'} the ladder the number got ${down?'bigger':'smaller'}, as it should.`});
+}
+
+/* ---- the two extras (Student Guide, not her slides), laid out the same way:
+   pump rate = volume ÷ hours (÷ minutes × 60) · time = volume ÷ rate (× 60 for minutes) ---- */
+function buildRate(o){
+  const v=o.vol, lines=[], traps=[];
+  const S=[{k:'pick',r:'iv',chk:'formula',ask:'What VOLUME is going in?',sub:'the mL to run in',reveal:['vi'],ok:`${qs(v,'mL')} is the volume. It goes on the top.`}];
+  let ans, exact, sense;
+  if(o.hr){
+    const h=o.hr; exact=v/h; ans=Math.round(exact);
+    const whole=Math.abs(exact-ans)<1e-9;
+    lines.push({lab:'formula',toks:[TK.f([TK.q('vi',v,'mL')],[TK.q('h',h,'hr')]),TK.o('='),
+      ...(whole?[TK.q('a',ans,'mL/hr')]:[TK.q('raw',exact,'mL/hr',{approx:true}),TK.o('→'),TK.q('a',ans,'mL/hr')])]});
+    S.push({k:'pick',r:'t',ask:'How LONG does it run?',sub:'the time in hours',reveal:['h'],ok:`${h} hours — on the bottom. The pump runs in mL per HOUR and this is already hours, so no × 60.`});
+    const calc={k:'num',ask:'Now the calculator.',sub:'volume ÷ hours',pre:`${qs(v,'mL')} ÷ ${h}hr =`,unit:'mL/hr',v:whole?ans:exact,reveal:whole?['a']:['raw'],
+      traps:[[r6(h/v),'Upside down — it’s volume ÷ time.'],[r6(v/h/60),'That’s mL per MINUTE — the pump runs in mL per hour, so don’t ÷ 60.']],
+      ok:whole?`${qs(ans,'mL/hr')} — a whole number, nothing to round.`:`${tr2(exact)} mL/hr. The pump takes a whole number — round it.`};
+    if(!whole) calc.tol=0.1;
+    S.push(calc);
+    if(!whole){
+      const lo=Math.floor(exact), hi=lo+1, up=ans===hi, d1=(tr2(exact).split('.')[1]||'0')[0];
+      const msg=up?`.${d1} is .5 or higher — round UP to ${hi}.`:`.${d1} is .4 or lower — round DOWN to ${lo}.`;
+      S.push({k:'choice',chk:'answer',ask:`Round ${tr2(exact)} to a whole number.`,sub:'.4 or lower → round DOWN · .5 or higher → round UP',reveal:['a'],opts:[
+        {t:`${lo} mL/hr`,ok:!up,msg},{t:`${hi} mL/hr`,ok:up,msg}]});
+      traps.push({v:up?lo:hi,slip:'rounding',msg:'.4 or lower round DOWN, .5 or higher round UP.'});
+    }
+    traps.push({v:r6(v/h/60),slip:'time',msg:'That’s mL per <b>minute</b> — the pump wants mL per <b>hour</b>, so don’t ÷ 60.'});
+    traps.push({v:r6(h/v),slip:'inverted',msg:'Upside down — it’s volume ÷ time.'});
+    sense=`${qs(ans,'mL/hr')} — check: ${ans} × ${h} hours ${whole?'=':'≈'} ${fmt(v)}mL.`;
+  } else {
+    const m=o.mins; ans=r6(v/m*60); exact=ans;   // every pool pairing comes out whole
+    lines.push({lab:'formula',toks:[TK.f([TK.q('vi',v,'mL')],[TK.q('mi',m,'mins')]),TK.o('×'),TK.x('60'),TK.o('='),TK.q('a',ans,'mL/hr')]});
+    S.push({k:'pick',r:'t',ask:'How LONG does it run?',sub:'the time — in minutes this time',reveal:['mi'],ok:`${m} minutes — on the bottom.`});
+    S.push({k:'choice',chk:'units',ask:'The pump runs in mL per HOUR, but the time is in minutes. So…',opts:shuffle([
+      {t:'× 60 at the end',ok:true,msg:'Volume ÷ minutes is mL per MINUTE. An hour is 60 minutes, so × 60 makes it mL per hour.'},
+      {t:'÷ 60 at the end',ok:false,msg:'÷ 60 makes it smaller. An hour is 60 minutes, so an hour’s worth is 60 times MORE — × 60.'},
+      {t:'Nothing — use it as it is',ok:false,msg:'Volume ÷ minutes is mL per MINUTE. The pump wants mL per HOUR — × 60.'}])});
+    S.push({k:'num',ask:'Now the calculator.',sub:'volume ÷ minutes × 60',pre:`${qs(v,'mL')} ÷ ${m}mins × 60 =`,unit:'mL/hr',v:ans,reveal:['a'],
+      traps:[[r6(v/m),'That’s mL per minute — × 60 for mL per hour.'],[r6(v/m/60),'÷ 60 — it should be × 60.'],[r6(m/v*60),'Upside down — it’s volume ÷ minutes.']],ok:`= ${qs(ans,'mL/hr')}.`});
+    traps.push({v:r6(v/m),slip:'time',msg:'That’s mL per <b>minute</b>. Multiply by 60 to get mL per <b>hour</b> — pumps are set in mL/hr.'});
+    traps.push({v:r6(v/m/60),slip:'time',msg:'You divided by 60 — an hour is 60 minutes, so × 60.'});
+    traps.push({v:r6(m/v*60),slip:'inverted',msg:'Upside down — it’s volume ÷ minutes × 60.'});
+    sense=`${qs(ans,'mL/hr')} — ${m<60?`more than the bag’s ${fmt(v)}mL, because it runs for less than an hour`:m===60?`the same as the bag’s ${fmt(v)}mL, because it runs for exactly an hour`:`less than the bag’s ${fmt(v)}mL, because it runs for over an hour`}.`;
+  }
+  return finish({cat:'rate',prompt:o.prompt||'',chips:o.chips||[],lines,steps:S,answer:ans,exact,unit:'mL/hr',aU:'mL/hr',traps,sense});
+}
+function buildTime(o){
+  const v=o.vol, r=o.rate, hrs=r6(v/r), mins=o.unit==='minutes', ans=mins?r6(v/r*60):hrs;
+  const frac=TK.f([TK.q('vi',v,'mL')],[TK.q('r',r,'mL/hr')]);
+  const lines=[{lab:'formula',toks:mins?[frac,TK.o('×'),TK.x('60'),TK.o('='),TK.q('a',ans,'mins')]:[frac,TK.o('='),TK.q('a',ans,'hr')]}];
+  const S=[
+    {k:'pick',r:'iv',chk:'formula',ask:'What VOLUME is going in?',sub:'the mL in the bag',reveal:['vi'],ok:`${qs(v,'mL')} — on the top.`},
+    {k:'pick',r:'r',ask:'How FAST is it running?',sub:'the rate in mL per hour',reveal:['r'],ok:`${qs(r,'mL/hr')} — on the bottom. Volume ÷ rate = how many hours.`},
+  ], traps=[];
+  if(mins){
+    S.push({k:'choice',chk:'units',ask:'Volume ÷ rate gives HOURS. The question wants minutes, so…',opts:shuffle([
+      {t:'× 60 at the end',ok:true,msg:'Each hour is 60 minutes, so hours × 60 = minutes.'},
+      {t:'÷ 60 at the end',ok:false,msg:'Minutes are smaller than hours, so there are MORE of them — × 60.'},
+      {t:'Leave it in hours',ok:false,msg:'The question asks for minutes. Hours × 60 = minutes.'}])});
+    S.push({k:'num',ask:'Now the calculator.',sub:'volume ÷ rate × 60',pre:`${qs(v,'mL')} ÷ ${qs(r,'mL/hr')} × 60 =`,unit:'mins',v:ans,reveal:['a'],
+      traps:[[hrs,'That’s hours — × 60 for minutes.'],[r6(r/v*60),'Upside down — it’s volume ÷ rate.'],[r6(v/r/60),'÷ 60 — it should be × 60.']],ok:`= ${qs(ans,'mins')}.`});
+    traps.push({v:hrs,slip:'time',msg:'That’s the answer in <b>hours</b> — the question asks for minutes (× 60).'});
+    traps.push({v:r6(r/v*60),slip:'inverted',msg:'Upside down — it’s <b>volume ÷ rate</b>, not rate ÷ volume.'});
+  } else {
+    S.push({k:'num',ask:'Now the calculator.',sub:'volume ÷ rate = hours',pre:`${qs(v,'mL')} ÷ ${qs(r,'mL/hr')} =`,unit:'hr',v:ans,reveal:['a'],
+      traps:[[r6(r/v),'Upside down — it’s volume ÷ rate.'],[r6(ans*60),'That’s minutes — the question asks for hours, so no × 60.']],ok:`= ${qs(ans,'hr')}.`});
+    traps.push({v:r6(ans*60),slip:'time',msg:'That’s the answer in <b>minutes</b> — the question asks for hours.'});
+    traps.push({v:r6(r/v),slip:'inverted',msg:'Upside down — it’s <b>volume ÷ rate</b>, not rate ÷ volume.'});
+  }
+  const sense=mins?`${ans} minutes — ${ans<60?'under':'over'} an hour, because ${fmt(v)}mL is ${v<r?'less':'more'} than the ${fmt(r)}mL it runs each hour.`
+    :`${ans} hours — check: ${qs(r,'mL/hr')} × ${ans}hr = ${fmt(v)}mL.`;
+  return finish({cat:'time',prompt:o.prompt||'',chips:o.chips||[],lines,steps:S,answer:ans,exact:ans,unit:mins?'minutes':'hours',aU:mins?'mins':'hr',traps,sense});
 }
 
 /* ============================== generators ==============================
@@ -1078,46 +1155,25 @@ const MINIBAG=[ // [additive, minimum sensible infusion minutes — keeps drug/d
 const RATE_H=[[1000,8],[1000,10],[1000,4],[1000,12],[1000,6],[1000,24],[500,4],[500,2],[500,6],[500,8],[250,2],[250,4]];
 const RATE_M=[[100,30],[100,20],[100,15],[50,30],[50,15],[250,30],[200,60],[150,30],[100,60]];
 function gRate(){
+  const {chips,sp}=PB();
   if(chance(.55)){
-    const [v,h]=rnd(RATE_H), exact=v/h, ans=Math.round(exact);
-    const needRound=Math.abs(exact-ans)>0.001;
-    const traps=[{v:exact/60, slip:'time', msg:`that's mL per <b>minute</b> — the pump wants mL per <b>hour</b>.`}];
-    return {cat:'rate',
-      prompt:`<b>${fmt(v)} mL</b> of ${rnd(FLUIDS)} is charted to run over <b>${fmt(h)} hours</b> via infusion pump. What rate will you set?${needRound?'<span class="roundnote">Round to the nearest whole number.</span>':''}`,
-      unit:'mL/hr', answer:ans, exact, tol:0, steps:[
-        `Rate (mL/hr) = volume ÷ time in hours`,
-        `= ${fmt(v)} ÷ ${fmt(h)} = <em>${fmt(exact)} mL/hr</em>${needRound?` → round to <em>${fmt(ans)} mL/hr</em>`:''}`,
-      ], traps};
-  } else {
-    const [v,m]=rnd(RATE_M), exact=v/m*60, ans=Math.round(exact);
-    const bag=rnd(MINIBAG.filter(b=>m>=b[1]))[0];
-    const traps=[{v:v/m, slip:'time', msg:`that's mL per <b>minute</b>. Multiply by 60 to get mL per <b>hour</b> — pumps are set in mL/hr.`}];
-    return {cat:'rate',
-      prompt:`${rnd(NAMES)} has <b>${bag}</b> in <b>${fmt(v)} mL</b> to run over <b>${fmt(m)} minutes</b> via pump. What rate in mL/hr will you set?`,
-      unit:'mL/hr', answer:ans, exact, tol:0, steps:[
-        `Rate (mL/hr) = (volume ÷ minutes) × 60`,
-        `= (${fmt(v)} ÷ ${fmt(m)}) × 60 = <em>${fmt(exact)} mL/hr</em>`,
-      ], traps};
+    const [v,h]=rnd(RATE_H), needRound=Math.abs(v/h-Math.round(v/h))>0.001;
+    const prompt=`${sp('iv',qs(v,'mL'))} of ${rnd(FLUIDS)} is charted to run over ${sp('t',`${h} hours`)} via infusion pump. What rate will you set?${needRound?'<span class="roundnote">Round to the nearest whole number.</span>':''}`;
+    return buildRate({prompt,chips,vol:v,hr:h});
   }
+  const [v,m]=rnd(RATE_M), bag=rnd(MINIBAG.filter(b=>m>=b[1]))[0];
+  const prompt=`${rnd(NAMES)} has ${sp('drug',bag)} in ${sp('iv',qs(v,'mL'))} to run over ${sp('t',`${m} minutes`)} via pump. What rate in mL/hr will you set?`;
+  return buildRate({prompt,chips,vol:v,mins:m});
 }
-const TIMES=[ // [mL, mL/hr, answer, unit]
-  [1000,125,8,'hours'],[1000,100,10,'hours'],[500,125,4,'hours'],[500,100,5,'hours'],
-  [250,125,2,'hours'],[1000,250,4,'hours'],[500,250,2,'hours'],[250,50,5,'hours'],
-  [100,200,30,'minutes'],[250,100,150,'minutes'],[50,100,30,'minutes'],[100,300,20,'minutes'],[150,200,45,'minutes'],
+const TIMES=[ // [mL, mL/hr, the unit the question asks for]
+  [1000,125,'hours'],[1000,100,'hours'],[500,125,'hours'],[500,100,'hours'],
+  [250,125,'hours'],[1000,250,'hours'],[500,250,'hours'],[250,50,'hours'],
+  [100,200,'minutes'],[250,100,'minutes'],[50,100,'minutes'],[100,300,'minutes'],[150,200,'minutes'],
 ];
 function gTime(){
-  const [v,r,ans,unit]=rnd(TIMES);
-  const hrs=v/r;
-  const traps=[];
-  if(unit==='hours'){ traps.push({v:ans*60, slip:'time', msg:`that's the answer in <b>minutes</b> — the question asks for hours.`}); }
-  else { traps.push({v:hrs, slip:'time', msg:`that's the answer in <b>hours</b> — the question asks for minutes (× 60).`}); }
-  if(Math.abs(r/v-ans)>0.01) traps.push({v:r/v, slip:'inverted', msg:`upside-down: it's <b>volume ÷ rate</b>, not rate ÷ volume.`});
-  return {cat:'time',
-    prompt:`An infusion of <b>${fmt(v)} mL</b> is running at <b>${fmt(r)} mL/hr</b>. How long will it take to finish, in <b>${unit}</b>?`,
-    unit, answer:ans, exact:ans, tol:0, steps:[
-      `Time (hours) = volume ÷ rate = ${fmt(v)} ÷ ${fmt(r)} = <em>${fmt(hrs)} hours</em>`,
-      unit==='minutes'?`Convert: ${fmt(hrs)} h × 60 = <em>${fmt(ans)} minutes</em>`:`Answer: <em>${fmt(ans)} hours</em>`,
-    ], traps};
+  const [v,r,unit]=rnd(TIMES), {chips,sp}=PB();
+  const prompt=`An infusion of ${sp('iv',qs(v,'mL'))} is running at ${sp('r',qs(r,'mL/hr'))}. How long will it take to finish, in <b>${unit}</b>?`;
+  return buildTime({prompt,chips,vol:v,rate:r,unit});
 }
 
 const GEN={tab:()=>genTab(),conv:genConv,liq:()=>genLiq(),inj:()=>genInj(),wt:()=>genWt(),ratio:genRatio,drip:()=>genDrip(),powder:()=>genPowder(),dil:genDil,rate:gRate,time:gTime};
@@ -1159,7 +1215,7 @@ function gradeSlot(s,raw){
   if(numOk&&!p.u){
     if(s.uopt==='ok') return {st:'ok'};
     if(s.uopt==='warn') return {st:'warn',msg:`Accepted (her own answer sheet does this) — but safest to write the unit: ${qs(s.v,s.u)}.`};
-    return {st:'bad',msg:`No unit. Her markers fail working without units — write ${qs(s.v,s.u)}.`};
+    return {st:'bad',nounit:true,msg:`No unit. Her markers fail working without units — write ${qs(s.v,s.u)}.`};
   }
   if(numOk) return {st:'bad',msg:`Right number, wrong unit — it should be ${uName(s.u,s.v)}${p.u&&p.u!=='?'?`, not ${uName(p.u,p.v)}`:''}.`};
   return {st:'bad',msg:`Not this number. ${BOXHINT[s.k]||''}`};
@@ -1180,7 +1236,7 @@ function mastery(cat){
 }
 
 /* ============================== views ============================== */
-let VIEW='learn', Q=null, answered=false, estPick=null, TPL=null, DR=null;
+let VIEW='learn', Q=null, answered=false, estPick=null, TPL=null, DR=null, GD=null;
 let LS=null;   // the open lesson
 let M=null;    // Joan's test in progress / just finished
 const view=$('#view');
@@ -1197,7 +1253,7 @@ function nav(v){
 $$('#nav button').forEach(b=>b.onclick=()=>nav(b.dataset.v));
 
 /* ---------- the paper: Joan's layout ---------- */
-const SLOTW={tablet:10,capsule:11,'drops/min':15,drops:12,'drops/mL':12,'mg/kg/day':10,'mg/day':9,'mg/kg':8,units:10,doses:7};
+const SLOTW={tablet:10,capsule:11,'drops/min':15,drops:12,'drops/mL':12,'mg/kg/day':10,'mg/day':9,'mg/kg':8,units:10,doses:7,'mL/hr':12};
 function tokHTML(t,ctx){
   if(t.t==='o') return `<span class="po">${t.s}</span>`;
   if(t.t==='x') return `<span class="px">${esc(t.s)}</span>`;
@@ -1219,7 +1275,6 @@ function paperHTML(lines,ctx){
 }
 const slotText=s=>s.approx?`${tr2(s.v)} ${s.u}`:qs(s.v,s.u);
 function workingHTML(q,label){
-  if(!q.lines) return `<div class="steps"><div class="lab">Worked solution</div><ol>${q.steps.map(s=>`<li><span>${s}</span></li>`).join('')}</ol></div>`;
   return `<div class="steps"><div class="lab">${label||'Joan’s working — copy this layout'}</div>${paperHTML(q.lines)}<p class="sense">✓ <b>Answer looks correct?</b> ${esc(q.sense)}</p></div>`;
 }
 
@@ -1256,12 +1311,12 @@ function wireGuided(g,rerender){
     if(g.si>=g.q.steps.length){ g.done=true; CHK.forEach(([k])=>g.chk.add(k)); }
     rerender();
   };
-  if(st.k==='pick') $$('#view [data-c]').forEach(b=>b.onclick=()=>{
+  if(st.k==='pick') $$('#view .gpanel [data-c]').forEach(b=>b.onclick=()=>{
     const c=g.q.chips[+b.dataset.c];
     if(c.r===st.r){ g.hl.add(c.r); advance(st.ok,'ok',st.reveal); }
     else { g.bad.add('c'+b.dataset.c); g.fb={c:'no',h:'✗ '+esc(pickMsg(c,st))}; rerender(); }
   });
-  else if(st.k==='choice') $$('#view [data-o]').forEach(b=>b.onclick=()=>{
+  else if(st.k==='choice') $$('#view .gpanel [data-o]').forEach(b=>b.onclick=()=>{
     const o=st.opts[+b.dataset.o];
     if(o.ok===true) advance(o.msg,'ok',o.reveal||st.reveal);
     else if(o.ok==='alt') advance(o.msg,'alt',(st.opts.find(x=>x.ok===true)||{}).reveal||st.reveal);  // accepted, but steered onto her preferred path
@@ -1329,7 +1384,7 @@ function renderLearnHome(){
     </div>
     <h2 class="sec">The path · about ${total} minutes in all</h2>
     ${LESSONS.map(L=>`<button class="lrow ${done_(L.id)?'done':''} ${nx&&nx.id===L.id?'next':''}" data-l="${L.id}"><span class="lnum">${done_(L.id)?'✓':L.n}</span><span class="lt"><b>${esc(L.title)}</b><span>${esc(L.sub)}</span></span><span class="lm">${L.min} min</span></button>`).join('')}
-    <p class="note">After the path: <b>Drill</b> makes it automatic — switch on <b>✍️ Fill the working</b> so every line is marked — and <b>Joan’s test</b> rehearses the real thing: 15 questions, 30 minutes.</p>`;
+    <p class="note">After the path: <b>Drill</b> makes it automatic — every question is worked on the paper like <b>Your turn</b>, every box marked — and <b>Joan’s test</b> rehearses the real thing: 15 questions, 30 minutes.</p>`;
   $('#lgo').onclick=()=>nx?openLesson(nx.id):nav('test');
   $$('.lrow').forEach(b=>b.onclick=()=>openLesson(b.dataset.l));
 }
@@ -1419,103 +1474,92 @@ function estimateChosen(){
   const o=Q.est.opts[estPick];
   return `<div class="estchosen">🎯 Your estimate: <b>${o.name}</b> <span>${o.range} ${esc(Q.unit)}</span></div>`;
 }
+/* Every drill question is worked on the paper, the way "Your turn" works in the
+   lessons: fill every box (number AND unit), check, fix the red boxes, check
+   again. Stuck → 🧭 Walk me through it (the "with me" steps), then write it
+   yourself; or Show me. Only the FIRST check counts toward mastery and streak. */
 function renderDrill(newQ){
-  if(newQ||!Q){ Q=makeQ(S.cat); answered=false; estPick=null; TPL=null; DR=null; }
-  const useTpl=S.fill&&!!Q.lines;
-  if(useTpl&&!TPL) TPL=newTpl(Q);
-  if(!useTpl&&S.est&&!Q.est) Q.est=buildEstOpts(Q.answer);
-  const estPhase=!useTpl&&S.est&&estPick===null&&!answered;
+  if(newQ||!Q){ Q=makeQ(S.cat); answered=false; estPick=null; TPL=newTpl(Q); DR=null; GD=null; }
+  if(S.est&&!Q.est) Q.est=buildEstOpts(Q.answer);
+  const estPhase=S.est&&estPick===null&&!DR&&!GD;
   const L=CATS[Q.cat].L;
   let body;
-  if(useTpl){
-    body=`<p class="note">Fill every box like your paper — the number AND its unit.</p>${tplPaper(TPL)}
-      ${answered?'':`<div class="nextrow"><button class="btn primary" id="tplCheck">Check my working</button></div>`}`;
-  } else if(estPhase) body=estimateBlock();
-  else body=`${S.est&&estPick!==null?estimateChosen():''}<div class="ansrow">
-      <div class="ansbox"><input id="ans" type="text" inputmode="decimal" autocomplete="off" placeholder="answer" ${answered?`value="${esc(DR.raw)}" readonly`:''}/><span class="unit">${esc(Q.unit)}</span></div>
-      ${answered?'':'<button class="btn primary" id="check">Check</button>'}</div>`;
+  if(GD) body=`${guidedHTML(GD)}${GD.done?`<div class="nextrow"><button class="btn primary" id="selfWrite">Now write it yourself →</button></div>`:''}`;
+  else if(estPhase) body=`<div class="q">${Q.prompt}</div>${estimateBlock()}`;
+  else body=`<div class="q">${Q.prompt}</div>${S.est&&estPick!==null?estimateChosen():''}
+      ${TPL.marks?'':'<p class="note">Work it out on the paper, like your test — fill every box with the number AND its unit (250mg · 5mL · 2 tablets). Enter jumps to the next box.</p>'}
+      ${tplPaper(TPL)}<div id="fb">${drillFeedback()}</div>`;
   view.innerHTML=`
     <div class="drillbar">
       <span class="pill ${S.streak>=5?'hot':''}">🔥 streak <b>${S.streak}</b></span>
       <span class="pill">🏆 best <b>${S.best}</b></span>
-      <button class="pill toggle ${S.fill?'on':''}" id="fillToggle" title="Write every line of the working like your test paper — every box is marked the way her markers mark">✍️ Fill the working${S.fill?' · on':''}</button>
-      ${useTpl?'':`<button class="pill toggle ${S.est?'on':''}" id="estToggle" title="Commit to the answer's size before you calculate — trains the reflex that catches decimal-place slips">🎯 Estimate first${S.est?' · on':''}</button>`}
+      <button class="pill toggle ${S.est?'on':''}" id="estToggle" title="Commit to the answer's size before you calculate — trains the reflex that catches decimal-place slips">🎯 Estimate first${S.est?' · on':''}</button>
     </div>
     ${chipRow()}
     <div class="card">
-      <div class="cmeta"><span class="tag acc">${CATS[Q.cat].icon} ${CATS[Q.cat].name}</span>${L?`<button class="tag" id="toLesson">📘 Learn this</button>`:''}<span class="tag right">drill</span></div>
-      <div class="q">${Q.prompt}</div>
+      <div class="cmeta"><span class="tag acc">${CATS[Q.cat].icon} ${CATS[Q.cat].name}</span>${L?`<button class="tag" id="toLesson">📘 Learn this</button>`:''}<span class="tag right">${GD?'with me':'drill'}</span></div>
       ${body}
-      <div id="fb">${answered?drillFeedback(useTpl):''}</div>
     </div>`;
   $$('.chip').forEach(b=>b.onclick=()=>{S.cat=b.dataset.c;save();renderDrill(true);});
-  $('#fillToggle').onclick=()=>{ S.fill=!S.fill; save(); renderDrill(true); };
-  if($('#estToggle')) $('#estToggle').onclick=()=>{ S.est=!S.est; save(); estPick=null; renderDrill(answered); };
+  $('#estToggle').onclick=()=>{ S.est=!S.est; save(); estPick=null; renderDrill(answered); };
   if($('#toLesson')) $('#toLesson').onclick=()=>openLesson(L);
-  if(answered){ if(useTpl) wireTpl(TPL,null,true); $('#next').onclick=()=>renderDrill(true); if(!useTpl) $('#next').focus(); return; }
-  if(useTpl){
-    wireTpl(TPL,checkDrillTpl,false);
-    $('#tplCheck').onclick=checkDrillTpl;
-    const f=$('#view .slot'); if(f&&matchMedia('(pointer:fine)').matches) f.focus();
-  } else if(estPhase){
-    $$('.estpill').forEach(b=>b.onclick=()=>{ estPick=+b.dataset.e; renderDrill(false); });
-  } else {
-    const inp=$('#ans');
-    inp.focus();
-    $('#check').onclick=checkDrill;
-    inp.onkeydown=e=>{ if(e.key==='Enter'&&!answered){ e.preventDefault(); e.stopPropagation(); checkDrill(); } };
+  if(GD){
+    wireGuided(GD,()=>renderDrill(false));
+    if(GD.done){ const b=$('#selfWrite'); b.onclick=()=>{ GD=null; TPL.marks=null; renderDrill(false); }; b.focus(); }
+    return;
   }
-}
-function checkDrill(){
-  if(answered) return;
-  const raw=$('#ans').value.trim();
-  const u=parseFloat(parseNum(raw));
-  if(raw===''||!isFinite(u)){ $('#ans').focus(); return; }
-  const g=grade(Q,u);
-  answered=true;
-  recordDrill(Q.cat,g.ok,g.slip);
-  let estNote='';
-  if(S.est && estPick!==null && Q.est){
-    const picked=Q.est.opts[estPick], trueTier=tierIndex(Q.answer), typedTier=tierIndex(u);
-    if(g.ok){
-      estNote = picked.gi===trueTier
-        ? `🎯 <b>Estimate on point.</b> You sized it up before calculating — that's the instinct that catches decimal-place slips at the bedside.`
-        : `Right answer — but your size estimate (<b>${MAGTIERS[picked.gi][2]}</b>) was off; it lands in <b>${MAGTIERS[trueTier][2]}</b>. Worth clocking that gap.`;
-    } else if(typedTier!==picked.gi){
-      estNote = `🎯 <b>Your own estimate flagged this.</b> You guessed <b>${picked.name}</b> (${picked.range}) but entered ${fmt(u)} — that clash between gut and answer is exactly when to stop and re-check.`;
-    } else if(picked.gi===trueTier){
-      estNote = `Your ballpark (<b>${picked.name}</b>) was right — the slip was in the arithmetic, not the size. Fix the step and trust the estimate.`;
-    } else {
-      estNote = `Both your estimate and your answer landed in <b>${picked.name}</b>, but the real size is <b>${MAGTIERS[trueTier][2]}</b> — recalibrate your feel for this one.`;
-    }
-  }
-  DR={g,u,raw,estNote};
-  renderDrill(false);
+  if(estPhase){ $$('.estpill').forEach(b=>b.onclick=()=>{ estPick=+b.dataset.e; renderDrill(false); }); return; }
+  wireTpl(TPL,checkDrillTpl,answered);
+  if(answered){ $('#next').onclick=()=>renderDrill(true); return; }
+  $('#tplCheck').onclick=checkDrillTpl;
+  $('#walk').onclick=walkDrill;
+  if($('#tplShow')) $('#tplShow').onclick=()=>{ showTpl(TPL); answered=true; renderDrill(false); };
+  const bad=$('#view .slot.bad'), first=$('#view .slot');
+  if(bad) bad.focus(); else if(first&&matchMedia('(pointer:fine)').matches) first.focus();
 }
 function checkDrillTpl(){
   if(answered) return;
   const pass=gradeTpl(TPL);
   const ai=TPL.slots.findIndex(s=>s.k==='a'), p=parseQty(TPL.vals[ai]||'');
   const g=isFinite(p.v)?grade(Q,p.v):{ok:false};
-  answered=true;
-  recordDrill(Q.cat,pass,pass?null:g.slip);
-  DR={g,pass};
+  if(!DR){
+    // the slip to log: the answer box's slip, else a missing unit (her markers' #2 reason)
+    const slip=pass?null:(g.slip||(TPL.marks.some(m=>m.nounit)?'nounit':null));
+    DR={first:pass,g,estNote:estNoteFor(g,p.v)};
+    recordDrill(Q.cat,pass,slip);
+  } else DR.g=g;
+  if(pass) answered=true;
   renderDrill(false);
 }
-function drillFeedback(useTpl){
-  const nextBtn=`<div class="nextrow"><button class="btn primary" id="next">Next question ↵</button></div>`;
-  if(useTpl){
-    return `${marksHTML(TPL)}${!DR.pass&&DR.g&&DR.g.msg?`<div class="fb no" style="margin-top:10px"><div class="slip" style="margin:0">💡 <b>Spotted your slip:</b> ${DR.g.msg}</div></div>`:''}
-      ${workingHTML(Q,'Joan’s working — compare yours')}${nextBtn}`;
+/* "with me" for this question — needing it counts as a miss if it comes before a first check */
+function walkDrill(){
+  if(!DR){ DR={first:false,g:{ok:false},estNote:''}; recordDrill(Q.cat,false,null); }
+  GD=newGuided(Q); renderDrill(false);
+}
+function estNoteFor(g,u){
+  if(!S.est||estPick===null||!Q.est||!isFinite(u)) return '';
+  const picked=Q.est.opts[estPick], trueTier=tierIndex(Q.answer), typedTier=tierIndex(u);
+  if(g.ok) return picked.gi===trueTier
+    ? `🎯 <b>Estimate on point.</b> You sized it up before calculating — that's the instinct that catches decimal-place slips at the bedside.`
+    : `Right answer — but your size estimate (<b>${MAGTIERS[picked.gi][2]}</b>) was off; it lands in <b>${MAGTIERS[trueTier][2]}</b>. Worth clocking that gap.`;
+  if(typedTier!==picked.gi) return `🎯 <b>Your own estimate flagged this.</b> You guessed <b>${picked.name}</b> (${picked.range}) but your answer box says ${fmt(u)} — that clash between gut and answer is exactly when to stop and re-check.`;
+  if(picked.gi===trueTier) return `Your ballpark (<b>${picked.name}</b>) was right — the slip was in the arithmetic, not the size. Fix the step and trust the estimate.`;
+  return `Both your estimate and your answer landed in <b>${picked.name}</b>, but the real size is <b>${MAGTIERS[trueTier][2]}</b> — recalibrate your feel for this one.`;
+}
+function drillFeedback(){
+  const t=TPL, walk='<button class="btn ghost" id="walk">🧭 Walk me through it</button>';
+  if(!t.marks) return `<div class="nextrow"><button class="btn primary" id="tplCheck">Check my working</button>${walk}</div>`;
+  const est=DR&&DR.estNote?`<div class="fb" style="padding:0;margin-top:10px"><div class="estfb" style="margin:0">${DR.estNote}</div></div>`:'';
+  if(!answered){
+    const slip=DR.g&&DR.g.msg?`<div class="fb no" style="margin-top:10px"><div class="slip" style="margin:0">💡 <b>Spotted your slip:</b> ${DR.g.msg}</div></div>`:'';
+    return `${marksHTML(t)}${slip}${est}<p class="note">Fix the red boxes and check again.</p>
+      <div class="nextrow"><button class="btn primary" id="tplCheck">Check again</button><button class="btn ghost" id="tplShow">Show me</button>${walk}</div>`;
   }
-  const g=DR.g;
-  return `<div class="fb ${g.ok?'ok':(g.near?'near':'no')}">
-      <div class="h">${g.ok?`✅ Correct — ${fmt(Q.answer)} ${esc(Q.unit)}`:(g.near?`⚠️ So close`:`❌ Not quite — it's ${fmt(Q.answer)} ${esc(Q.unit)}`)}</div>
-      ${g.ok&&S.streak>0&&S.streak%10===0?`<div>🔥 ${S.streak} in a row. That's test-passing form.</div>`:''}
-      ${g.msg?`<div class="slip">💡 <b>Spotted your slip:</b> ${g.msg}</div>`:''}
-      ${DR.estNote?`<div class="estfb">${DR.estNote}</div>`:''}
-    </div>
-    ${workingHTML(Q)}${Q.lines?'<p class="note">On the test this is what goes on your paper — the answer on its own scores nothing.</p>':''}${nextBtn}`;
+  const note=t.shown?'':DR.first
+    ?(S.streak>0&&S.streak%10===0?`<p class="note">🔥 ${S.streak} in a row. That's test-passing form.</p>`:'')
+    :'<p class="note">Fixed — a marker would pass it now. It counts as a miss for mastery (only the first go counts), so do the next one clean.</p>';
+  return `${marksHTML(t)}${est}${note}<p class="sense">✓ <b>Answer looks correct?</b> ${esc(Q.sense)}</p>
+    <div class="nextrow"><button class="btn primary" id="next">Next question ↵</button></div>`;
 }
 /* single delegated Enter-to-advance — no per-render document handler juggling */
 document.addEventListener('keydown',e=>{
@@ -1855,13 +1899,13 @@ $('#btnFormulas').onclick=()=>openModal(`
   <div class="fcard"><div class="fn">Units ladder</div><div class="fx"><code>g → mg → mcg</code> each step × 1000 · <code>L → mL</code> × 1000<small>Units must match top and bottom. Multiply the bigger unit down (× 1000) on its own line first. A 0 before every decimal: 0.5, never .5.</small></div></div>
   <div class="fcard"><div class="fn">Special cases</div><div class="fx"><small>1:1000 = 1g in 1000mL = 1mg/1mL · Powder: use the strength AFTER mixing · Syringe dilution: add the volumes first (1mL + 9mL = 10mL); GOT = the whole ampoule’s mg.</small></div></div>
   <div class="fcard"><div class="fn">Her checklist</div><div class="fx">No distractions · Units the same? · Formula · Answer looks correct? · Double check</div></div>
-  <div class="fcard"><div class="fn">Extra — not in her 2026 slides</div><div class="fx"><code>mL/hr = volume ÷ hours</code> · <code>time = volume ÷ rate</code><small>The Student Guide lists these, but no 2026 practice test asks them. They live in Drill under “Extra”.</small></div></div>
+  <div class="fcard"><div class="fn">Extra — not in her 2026 slides</div><div class="fx"><code>mL/hr = volume (mL) ÷ time (hr)</code> — over minutes: <code>÷ minutes × 60</code> · <code>time (hr) = volume ÷ rate</code> — in minutes: <code>× 60</code><small>The Student Guide lists these, but no 2026 practice test asks them. They live in Drill under “Extra”, with the working marked the same way.</small></div></div>
   <div class="fcard"><div class="fn">Why “mcg” here</div><div class="fx"><small>On real NZ charts, write microgram in full — “mcg” is an error-prone abbreviation. Joan’s test papers print “mcg”, so this trainer matches the test.</small></div></div>`);
 $('#btnHelp').onclick=()=>openModal(`
   <h3>? How this works</h3>
   <div class="fcard"><div class="fn">What it is</div><div class="fx">A trainer for the 722.544 medication calculations test that teaches <b>Joan’s</b> method — her three formulas, her layout, her checklist. Built from her 2026 slides (Medication Calculations Parts One &amp; Two), her Canvas answer sheets, Practice Tests 3–5 and her results post (27 Aug).</div></div>
   <div class="fcard"><div class="fn">📘 Learn</div><div class="fx">10 short lessons in her order. Each one: read her example → two <b>with me</b> (one small question at a time; the working writes itself as you answer) → two <b>your turn</b> (you fill every box of the working yourself, and each box is marked).</div></div>
-  <div class="fcard"><div class="fn">Drill</div><div class="fx">Endless fresh questions. Type the answer, or switch on <b>✍️ Fill the working</b> to write every line. A wrong answer gets its slip named (upside down, forgot the volume, didn’t convert…).</div></div>
+  <div class="fcard"><div class="fn">Drill</div><div class="fx">Endless fresh questions, every one worked like <b>Your turn</b>: fill every box of the working — number AND unit — and each box is marked. Fix the red boxes and check again; stuck? <b>🧭 Walk me through it</b> does it step by step with you, then you write it yourself. A wrong answer gets its slip named (upside down, forgot the volume, didn’t convert…). Only your first go counts toward mastery.</div></div>
   <div class="fcard"><div class="fn">Joan’s test</div><div class="fx">Her format: 15 multiple-choice, 30 minutes, 15/15 to pass. Write your working on paper; at the end you mark it against her layout. Each wrong option is a real slip, so a wrong pick tells you which one you made.</div></div>
   <div class="fcard"><div class="fn">How a box is marked</div><div class="fx">Right number AND right unit = ✓. Missing unit = ✗ (her markers’ #2 reason). The right number in the wrong box = ✗. Two soft spots copy her own answer sheets: a bare “20” drop factor and a bare “× 1” for one tablet are accepted with a nudge to write the unit.</div></div>
   <div class="fcard"><div class="fn">Course-material flags</div><div class="fx"><small>1 · Calculator: Practice Test 4 Q15 says simple only; her 25 Aug post also allows scientific (not graphics) — bring a simple one.<br>2 · Her daily-dosing slide writes the day total as “40mg/kg/day”; it’s 40mg/day.<br>3 · The Student Guide lists mL/hr and completion times; the 2026 slides teach drops/min only — those two live under Drill → Extra.</small></div></div>

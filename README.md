@@ -34,11 +34,16 @@ rates (.5 up) but never medication volumes.
   (one small question at a time; the working writes itself as you answer;
   her checklist ticks as you go) → two **your turn** (fill every box of the
   working — number AND unit — and each box is marked).
-- **Drill** — endless questions per topic. Type the answer, or switch on
-  **✍️ Fill the working** to write every line. Wrong answers get their slip
-  named (upside down, left off the volume, didn't convert, used the bottle's
-  total, calculator order…). "Extra" holds mL/hr and infusion time — listed in
-  the Student Guide but not in her 2026 slides.
+- **Drill** — endless questions per topic, every one worked like a lesson's
+  **your turn**: fill every box of the working (number AND unit), each box is
+  marked, fix the red ones and check again. Stuck? **🧭 Walk me through it**
+  runs the lesson's **with me** steps on that question, then you write it
+  yourself; **Show me** fills it in. There is no answer-only mode. Only the
+  first check counts toward mastery and the streak. Wrong answers get their
+  slip named (upside down, left off the volume, didn't convert, used the
+  bottle's total, calculator order, no unit…). "Extra" holds mL/hr and
+  infusion time — listed in the Student Guide but not in her 2026 slides —
+  laid out and marked the same way.
 - **Joan's test** — her format: 15 multiple-choice questions in the order of
   her Practice Test 4, 30 minutes, 15/15 to pass, question navigator,
   skip-and-return with a 2-minute nudge. Every wrong option is a real slip, so
@@ -53,12 +58,12 @@ After any edit to the engine, generators or drug pools, run:
     node audit.js            # optional: node audit.js index.html 8000
 
 It parses every inline script, then for every generator variant the app uses
-it re-solves each question from the numbers it displays, re-checks every line
+(the two Extra topics included) it re-solves each question from the numbers it displays, re-checks every line
 of working, checks the fill-the-working boxes accept their own model answer
 (and reject a bare number), simulates each guided build to the end, checks the
 4 multiple-choice options, and rebuilds 51 of Joan's own worked examples and
-practice-test questions to confirm the engine reproduces her answers. It must
-report zero failures before pushing.
+practice-test questions to confirm the engine reproduces her answers (plus a
+few hand-worked Extra answers). It must report zero failures before pushing.
 
 This is a practice tool, not a clinical reference. The trainer prints "mcg"
 because her test papers do; on real NZ charts, write microgram in full.

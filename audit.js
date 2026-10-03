@@ -49,7 +49,7 @@ const sandbox = {
   console,
 };
 vm.createContext(sandbox);
-vm.runInContext(html.slice(start, end) + '\n;__x={makeQ,grade,gradeSlot,fmt,qs,tr2,mcqOpts,CATS,MOCK,genTab,genLiq,genInj,genWt,genRatio,genDrip,genPowder,genDil,genConv,buildWG,buildWT,buildDrip,buildDil,roundHalfUp};', sandbox);
+vm.runInContext(html.slice(start, end) + '\n;__x={makeQ,grade,gradeSlot,fmt,qs,tr2,mcqOpts,CATS,MOCK,genTab,genLiq,genInj,genWt,genRatio,genDrip,genPowder,genDil,genConv,gRate,gTime,buildWG,buildWT,buildDrip,buildDil,buildRate,buildTime,roundHalfUp};', sandbox);
 const X = sandbox.__x;
 
 /* ---------- independent number/unit reader (deliberately NOT the app's parseQty) ---------- */
@@ -61,6 +61,7 @@ function readQty(t) {
   if (/^tablets?$/.test(u)) u = 'tablet';
   else if (/^capsules?$/.test(u)) u = 'capsule';
   else if (/^hours?$/.test(u)) u = 'hr';
+  else if (/^minutes?$/.test(u)) u = 'mins';
   else if (/^drops?(\/mL| per mL)$/.test(u)) u = 'drops/mL';
   else if (/^doses?$/.test(u) || /^divided doses$/.test(u)) u = 'doses';
   return { v: parseFloat(m[1]), u };
@@ -101,6 +102,17 @@ function resolve(q) {
     if (!c || !to) return null;
     const T = { g: 1e6, mg: 1e3, mcg: 1, L: 1000, mL: 1 };
     return c.v * T[c.u] / T[to[1]];
+  }
+  if (q.cat === 'rate') {
+    const iv = R('iv'), t = R('t');
+    if (!iv || !t || iv.u !== 'mL') return null;
+    const hrs = t.u === 'hr' ? t.v : t.u === 'mins' ? t.v / 60 : null;
+    return hrs == null ? null : Math.round(iv.v / hrs);
+  }
+  if (q.cat === 'time') {
+    const iv = R('iv'), r = R('r'), unit = strip(q.prompt).match(/ in (hours|minutes)\?$/);
+    if (!iv || !r || !unit || iv.u !== 'mL' || r.u !== 'mL/hr') return null;
+    return unit[1] === 'hours' ? iv.v / r.v : iv.v / r.v * 60;
   }
   return null;
 }
@@ -149,8 +161,9 @@ function checkLines(q) {
     }
     prevLast = vals[vals.length - 1].v;
     // units must match top and bottom of a single-quantity fraction
-    // (the drip line's drops ÷ mins fraction is a rate, so only the want/got fraction is held to this)
-    for (const t of line.toks) if (t.t === 'f' && t.top.length === 1 && t.bot.length === 1 && t.top[0].u !== 'drops' && t.top[0].u !== t.bot[0].u) fail('fractionUnitsDiffer', q, t.top[0].u + '/' + t.bot[0].u);
+    // (drops ÷ mins, mL ÷ hr, mL ÷ mL/hr are rates/times, so only the want/got fraction is held to this)
+    const RATE_BOT = new Set(['mins', 'hr', 'mL/hr']);
+    for (const t of line.toks) if (t.t === 'f' && t.top.length === 1 && t.bot.length === 1 && t.top[0].u !== 'drops' && !RATE_BOT.has(t.bot[0].u) && t.top[0].u !== t.bot[0].u) fail('fractionUnitsDiffer', q, t.top[0].u + '/' + t.bot[0].u);
   }
   const ans = [];
   const walk = toks => toks.forEach(t => { if (t.t === 'f') { walk(t.top); walk(t.bot); } else if (t.t === 'q' && t.k === 'a') ans.push(t); });
@@ -243,25 +256,11 @@ const VARIANTS = [
   ['drip any', () => X.genDrip(), { cat: 'drip' }], ['drip df20', () => X.genDrip({ df: 20 }), { cat: 'drip' }], ['drip L60', () => X.genDrip({ df: 60, L: true }), { cat: 'drip', L: true }],
   ['powder any', () => X.genPowder(), { cat: 'powder' }], ['powder oral', () => X.genPowder('oral'), { cat: 'powder' }], ['powder inj', () => X.genPowder('inj'), { cat: 'powder' }],
   ['dil', () => X.genDil(), { cat: 'dil' }], ['conv', () => X.genConv(), { cat: 'conv' }],
+  ['rate', () => X.gRate(), { cat: 'rate' }], ['time', () => X.gTime(), { cat: 'time' }],
 ];
 for (const [label, gen, contract] of VARIANTS) for (let i = 0; i < N; i++) audit(gen(), label, contract);
 for (let i = 0; i < N; i++) X.MOCK.forEach((f, k) => audit(f(), 'mock Q' + (k + 1)));
-for (const cat of Object.keys(X.CATS)) if (!X.CATS[cat].extra) for (let i = 0; i < N; i++) audit(X.makeQ(cat), 'drill ' + cat);
-
-/* ---------- the two extras keep the old text resolver ---------- */
-for (let i = 0; i < N; i++) for (const cat of ['rate', 'time']) {
-  const q = X.makeQ(cat), p = strip(q.prompt);
-  let r = null, m;
-  if (cat === 'rate') {
-    if ((m = p.match(/([\d.]+) mL of .+? to run over ([\d.]+) hours via infusion pump/))) r = Math.round(+m[1] / +m[2]);
-    else if ((m = p.match(/in ([\d.]+) mL to run over ([\d.]+) minutes via pump/))) r = Math.round(+m[1] / +m[2] * 60);
-  } else if ((m = p.match(/infusion of ([\d.]+) mL is running at ([\d.]+) mL\/hr\. How long .+ in (hours|minutes)\?/))) {
-    const h = +m[1] / +m[2]; r = m[3] === 'hours' ? h : h * 60;
-  }
-  if (r == null) fail('unresolvable_' + cat, q);
-  else if (!near(r, q.answer)) fail('displayedMathsMismatch_' + cat, q, r + ' vs ' + q.answer);
-  if (!X.grade(q, q.answer).ok) fail('gradeRejectsOwnAnswer', q);
-}
+for (const cat of Object.keys(X.CATS)) for (let i = 0; i < N; i++) audit(X.makeQ(cat), 'drill ' + cat);
 
 /* ---------- 3. Joan's published answers ---------- */
 const W = (w, g, v) => X.buildWG({ want: w, got: g, vol: v });
@@ -292,6 +291,19 @@ const JOAN = [
   ['PT5 Q8 penicillin 1g/10mL', W(mg(200), g_(1), mL(10)), 2], ['PT5 Q9 NaCl 0.6L', X.buildDrip({ vol: { v: 0.6, u: 'L' }, df: 60, hr: 4 }), 150],
   ['PT5 Q10 midazolam', X.buildDil({ want: mg(1.5), amp: mg(5), av: 5, dv: 5 }), 3],
 ];
+/* the two extras aren't Joan's, so they're checked against hand-worked answers instead */
+const EXTRA = [
+  ['rate 1000mL/8hr', X.buildRate({ vol: 1000, hr: 8 }), 125], ['rate 1000mL/6hr', X.buildRate({ vol: 1000, hr: 6 }), 167],
+  ['rate 500mL/8hr', X.buildRate({ vol: 500, hr: 8 }), 63], ['rate 1000mL/12hr', X.buildRate({ vol: 1000, hr: 12 }), 83],
+  ['rate 100mL/30min', X.buildRate({ vol: 100, mins: 30 }), 200], ['rate 100mL/20min', X.buildRate({ vol: 100, mins: 20 }), 300],
+  ['time 1000mL@125', X.buildTime({ vol: 1000, rate: 125, unit: 'hours' }), 8], ['time 250mL@100 min', X.buildTime({ vol: 250, rate: 100, unit: 'minutes' }), 150],
+  ['time 100mL@300 min', X.buildTime({ vol: 100, rate: 300, unit: 'minutes' }), 20],
+];
+for (const [name, q, want] of EXTRA) {
+  if (!near(q.answer, want)) fail('extraAnswerMismatch', null, name + ': engine ' + q.answer + ', by hand ' + want);
+  q.prompt = name; checkLines(q); checkTemplate(q);
+}
+
 let joanOk = 0;
 for (const [name, q, want] of JOAN) {
   if (!near(q.answer, want)) fail('joanAnswerMismatch', null, name + ': engine ' + q.answer + ', Joan ' + want);
@@ -300,7 +312,7 @@ for (const [name, q, want] of JOAN) {
   checkLines(q); checkTemplate(q);
 }
 
-const total = (VARIANTS.length + X.MOCK.length + Object.keys(X.CATS).filter(c => !X.CATS[c].extra).length + 2) * N;
+const total = (VARIANTS.length + X.MOCK.length + Object.keys(X.CATS).length) * N;
 console.log('=== MedCalc audit:', file);
 console.log('inline scripts parsed     :', scripts.length);
 console.log('questions generated       :', total);
