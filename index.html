@@ -447,7 +447,7 @@ let S=load();
 if(window.Cloud) Cloud.sync([KEY]);   // syncs progress across devices when signed in; no-op otherwise
 function load(){
   const stats={}; Object.keys(CATS).forEach(c=>stats[c]={a:0,c:0,last:[]});
-  const def={theme:'dark',stats,slips:{},streak:0,best:0,tests:[],cat:'all',est:false,mt:30,learn:{}};
+  const def={theme:'dark',stats,slips:{},streak:0,best:0,tests:[],cat:'all',est:false,blank:false,mt:30,learn:{}};
   try{ const s=JSON.parse(localStorage.getItem(KEY));
     if(s&&s.stats){
       // migration guard: categories added in later versions get fresh stats
@@ -1262,7 +1262,7 @@ function tokHTML(t,ctx){
   if(ctx.mode==='tpl'){
     const id=ctx.slots.length; ctx.slots.push(t);
     const w=SLOTW[t.u]||8;   // wide enough for the model answer ("500mcg", "2 tablets", "83.33 drops/min") plus the padding
-    return `<input class="slot" data-s="${id}" placeholder="${esc(lab)}" aria-label="${esc(lab)}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="width:calc(${w}ch + 20px)"/>`;
+    return `<input class="slot" data-s="${id}" placeholder="${S.blank?'':esc(lab)}" aria-label="${esc(lab)}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="width:calc(${w}ch + 20px)"/>`;
   }
   if(ctx.mode==='guided'&&!ctx.rev.has(t.k)) return `<span class="pq ph">${esc(lab)}</span>`;
   const txt=t.approx?`${tr2(t.v)} ${t.u}`:qs(t.v,t.u);
@@ -1494,6 +1494,7 @@ function renderDrill(newQ){
       <span class="pill ${S.streak>=5?'hot':''}">🔥 streak <b>${S.streak}</b></span>
       <span class="pill">🏆 best <b>${S.best}</b></span>
       <button class="pill toggle ${S.est?'on':''}" id="estToggle" title="Commit to the answer's size before you calculate — trains the reflex that catches decimal-place slips">🎯 Estimate first${S.est?' · on':''}</button>
+      <button class="pill toggle ${S.blank?'on':''}" id="blankToggle" title="Hide the WANT / GOT / VOLUME labels so the boxes are empty, like the real paper — you have to know which number goes where. Applies to the lessons too.">⬜ Blank boxes${S.blank?' · on':''}</button>
     </div>
     ${chipRow()}
     <div class="card">
@@ -1502,6 +1503,7 @@ function renderDrill(newQ){
     </div>`;
   $$('.chip').forEach(b=>b.onclick=()=>{S.cat=b.dataset.c;save();renderDrill(true);});
   $('#estToggle').onclick=()=>{ S.est=!S.est; save(); estPick=null; renderDrill(answered); };
+  $('#blankToggle').onclick=()=>{ S.blank=!S.blank; save(); renderDrill(false); };
   if($('#toLesson')) $('#toLesson').onclick=()=>openLesson(L);
   if(GD){
     wireGuided(GD,()=>renderDrill(false));
