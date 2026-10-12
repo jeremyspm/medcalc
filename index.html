@@ -237,6 +237,7 @@ h2.sec{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--tx
 .pq{white-space:nowrap}
 .pq.pa{text-decoration:underline double;text-underline-offset:5px;font-weight:700}
 .pq.ph{font:800 10.5px/1 -apple-system,"Segoe UI",Roboto,sans-serif;color:var(--tx3);border:1.5px dashed var(--line2);border-radius:7px;padding:7px 8px;text-transform:uppercase;letter-spacing:.5px}
+.pq.ph.blank{display:inline-block;min-width:7ch}
 .pq.fresh{animation:ink .6s ease}
 @keyframes ink{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 .slot{font:600 16px/1.2 -apple-system,"Segoe UI",Roboto,sans-serif;background:var(--card);color:var(--tx);border:1.5px solid var(--line2);border-radius:8px;padding:7px 8px;min-width:0;max-width:100%}
@@ -1264,7 +1265,7 @@ function tokHTML(t,ctx){
     const w=SLOTW[t.u]||8;   // wide enough for the model answer ("500mcg", "2 tablets", "83.33 drops/min") plus the padding
     return `<input class="slot" data-s="${id}" placeholder="${S.blank?'':esc(lab)}" aria-label="${esc(lab)}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="width:calc(${w}ch + 20px)"/>`;
   }
-  if(ctx.mode==='guided'&&!ctx.rev.has(t.k)) return `<span class="pq ph">${esc(lab)}</span>`;
+  if(ctx.mode==='guided'&&!ctx.rev.has(t.k)) return S.blank?`<span class="pq ph blank" aria-label="${esc(lab)}">&nbsp;</span>`:`<span class="pq ph">${esc(lab)}</span>`;
   const txt=t.approx?`${tr2(t.v)} ${t.u}`:qs(t.v,t.u);
   return `<span class="pq${t.k==='a'?' pa':''}${ctx.fresh&&ctx.fresh.has(t.k)?' fresh':''}">${esc(txt)}</span>`;
 }
@@ -1494,7 +1495,7 @@ function renderDrill(newQ){
       <span class="pill ${S.streak>=5?'hot':''}">🔥 streak <b>${S.streak}</b></span>
       <span class="pill">🏆 best <b>${S.best}</b></span>
       <button class="pill toggle ${S.est?'on':''}" id="estToggle" title="Commit to the answer's size before you calculate — trains the reflex that catches decimal-place slips">🎯 Estimate first${S.est?' · on':''}</button>
-      <button class="pill toggle ${S.blank?'on':''}" id="blankToggle" title="Hide the WANT / GOT / VOLUME labels so the boxes are empty, like the real paper — you have to know which number goes where. Applies to the lessons too.">⬜ Blank boxes${S.blank?' · on':''}</button>
+      <button class="pill toggle ${S.blank?'on':''}" id="blankToggle" title="Hide the WANT / GOT / VOLUME labels so the boxes are empty, like the real paper — you have to know which number goes where. Applies to Walk me through it and the lessons too.">⬜ Blank boxes${S.blank?' · on':''}</button>
     </div>
     ${chipRow()}
     <div class="card">
