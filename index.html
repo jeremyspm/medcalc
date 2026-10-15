@@ -12,13 +12,16 @@
 try{document.documentElement.setAttribute('data-theme',localStorage.getItem('hub.theme')||'dark');}catch(e){}</script>
 <style>
 :root{
-  /* HOUSE PALETTE — copied by value from hub/index.html:16-38. Do not fork. */
-  --bg:#161719; --bg2:#161719; --card:#1c1c1f; --card2:#242427;
+  /* HOUSE PALETTE — copied by value from hub/index.html:16-38. Do not fork.
+     Except the paper's colour (15 Oct 2026): Pharm's purple, as on jeremyspm.github.io. The page takes a soft tint of
+     it, the header bar and the banner wear it solid, and the accent comes from it (it was the house indigo). */
+  --paperhue:#9333ea;
+  --bg:color-mix(in srgb,var(--paperhue) 7%,#161719); --bg2:var(--bg); --card:#1c1c1f; --card2:#242427;
   --line:rgba(255,255,255,.10); --line2:rgba(255,255,255,.15);
   --tx:#f2f2f6; --tx2:rgba(255,255,255,.56); --tx3:rgba(255,255,255,.34);
-  --acc:#6366F1; --acc2:#565AE6;      /* fill only */
-  --acc-tx:#818CF8;                    /* the accent as TEXT — --acc is illegible on the ground */
-  --acc-soft:rgba(99,102,241,.16);
+  --acc:color-mix(in srgb,var(--paperhue) 88%,#000); --acc2:color-mix(in srgb,var(--paperhue) 76%,#000);   /* fill only */
+  --acc-tx:color-mix(in srgb,var(--paperhue) 70%,#fff);   /* the accent as TEXT — --acc is illegible on the ground */
+  --acc-soft:color-mix(in srgb,var(--paperhue) 16%,transparent);
   --good:#32D74B; --hard:#FF9F0A; --miss:#FF453A;
   --gGood:color-mix(in srgb,var(--good) 16%,transparent);
   --gHard:color-mix(in srgb,var(--hard) 16%,transparent);
@@ -31,12 +34,12 @@ try{document.documentElement.setAttribute('data-theme',localStorage.getItem('hub
   --hand:"Kalam","Segoe Print","Bradley Hand","Comic Sans MS",-apple-system,"Segoe UI",Roboto,sans-serif;
 }
 html[data-theme="light"]{
-  --bg:#eceef3; --bg2:#eceef3; --card:#ffffff; --card2:#f4f5f7;
+  --bg:color-mix(in srgb,var(--paperhue) 7%,#eceef3); --bg2:var(--bg); --card:#ffffff; --card2:#f4f5f7;
   --line:rgba(0,0,0,.10); --line2:rgba(0,0,0,.14);
   --tx:#16161a; --tx2:rgba(0,0,0,.52); --tx3:rgba(0,0,0,.34);
-  --acc:#4F46E5; --acc2:#4138CF;
-  --acc-tx:#4F46E5;
-  --acc-soft:rgba(79,70,229,.12);
+  --acc:color-mix(in srgb,var(--paperhue) 88%,#000); --acc2:color-mix(in srgb,var(--paperhue) 76%,#000);
+  --acc-tx:color-mix(in srgb,var(--paperhue) 80%,#000);
+  --acc-soft:color-mix(in srgb,var(--paperhue) 12%,transparent);
   --good:#12833A; --hard:#A35C00; --miss:#C62A20;
   --gGood:color-mix(in srgb,var(--good) 12%,transparent);
   --gHard:color-mix(in srgb,var(--hard) 12%,transparent);
@@ -59,10 +62,34 @@ button{font-family:inherit;cursor:pointer;border:none;color:inherit;background:n
 b{font-variant-numeric:tabular-nums}
 
 /* Header */
-header{display:flex;align-items:center;gap:8px;margin:6px 0 12px}
+/* the header bar wears the paper's colour solid (15 Oct 2026); it runs to the column's edges, rounded underneath */
+header{display:flex;align-items:center;gap:8px;margin:-14px -16px 14px;padding:10px 16px;border-radius:0 0 16px 16px;color:#fff;
+  background:linear-gradient(100deg,color-mix(in srgb,var(--paperhue) 72%,#000),color-mix(in srgb,var(--paperhue) 88%,#000));
+  box-shadow:0 4px 18px -8px color-mix(in srgb,var(--paperhue) 60%,transparent)}
+header .iconbtn{color:#fff;background:rgb(255 255 255 / .1);border-color:rgb(255 255 255 / .3)}
+header .iconbtn:hover{color:#fff;background:rgb(255 255 255 / .2);border-color:rgb(255 255 255 / .45)}
 .brand{display:flex;flex-direction:column;line-height:1.15;margin-right:auto;min-width:0}
 .brand b{font-size:15px;letter-spacing:.2px}
-.brand span{font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:1.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand span{font-size:11px;color:rgb(255 255 255 / .8);text-transform:uppercase;letter-spacing:1.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* the banner: the tool's name in giant type on the paper's colour, its emoji as a watermark, the resit countdown */
+.idcard{position:relative;overflow:hidden;margin:0 0 14px;padding:20px 22px;border-radius:18px;color:#fff;
+  background:radial-gradient(90% 130% at 100% 0%,rgb(255 255 255 / .2),transparent 60%),
+    linear-gradient(135deg,color-mix(in srgb,var(--paperhue) 94%,#fff),color-mix(in srgb,var(--paperhue) 72%,#000));
+  box-shadow:0 14px 34px -16px color-mix(in srgb,var(--paperhue) 80%,transparent)}
+.idcard .idic{position:absolute;right:-8px;bottom:-30px;font-size:7.5rem;line-height:1;opacity:.22;transform:rotate(-14deg);pointer-events:none}
+.idcard small{position:relative;display:block;font-size:.72rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:rgb(255 255 255 / .86)}
+.idcard b{position:relative;display:block;font-size:clamp(2.3rem,7vw,3.4rem);line-height:.95;margin:6px 0 8px;font-weight:900;letter-spacing:-.03em;text-transform:uppercase}
+.idcard>span:not(.idic){position:relative;display:block;font-size:.88rem;color:rgb(255 255 255 / .9);line-height:1.35}
+.idcard .idwhen{position:relative;display:inline-flex;margin-top:12px;padding:5px 12px;border-radius:999px;background:rgb(255 255 255 / .18);
+  border:1px solid rgb(255 255 255 / .32);font-size:.8rem;font-weight:700}
+.idcard .idwhen[hidden]{display:none}
+@media (max-width:560px){
+  .idcard{padding:14px 16px;margin-bottom:10px;border-radius:14px}
+  .idcard .idic{font-size:5.5rem;bottom:-20px}
+  .idcard b{font-size:2.1rem;margin:4px 0 6px}
+  .idcard>span:not(.idic){font-size:.8rem}
+  .idcard .idwhen{margin-top:8px;font-size:.76rem}
+}
 .iconbtn{width:38px;height:38px;border-radius:10px;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:17px;color:var(--tx2);transition:.15s}
 .iconbtn:hover{border-color:var(--line2);color:var(--tx)}
 
@@ -343,12 +370,18 @@ h2.sec{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:var(--tx
 <body>
 <div class="wrap">
   <header>
-    <a class="iconbtn" href="https://jeremyspm.github.io/" title="Back to the hub" style="width:auto;padding:0 13px;gap:5px;font-size:13px;font-weight:700;text-decoration:none">← Hub</a>
+    <a class="iconbtn" href="https://jeremyspm.github.io/" title="All the BN2 study tools" style="width:auto;padding:0 13px;gap:5px;font-size:13px;font-weight:700;text-decoration:none">‹ All tools</a>
     <div class="brand"><b>MedCalc</b><span>Joan’s way</span></div>
     <button class="iconbtn" id="btnFormulas" title="Joan’s formula sheet">∑</button>
     <button class="iconbtn" id="btnHelp" title="How this works">?</button>
     <button class="iconbtn" id="btnTheme" title="Theme">◐</button>
   </header>
+  <div class="idcard"><span class="idic" aria-hidden="true">💊</span><small>Intro to Pharmacology · 722.544</small><b>MedCalc</b><span>Joan’s three formulas, your working marked box by box</span><span class="idwhen" id="idWhen" hidden></span></div>
+  <script>
+  /* the resit countdown (the hub's date, checked 12 Oct): shown until the day itself, then it removes itself */
+  (() => { const d = Math.round((new Date(2026, 9, 21) - new Date(new Date().toDateString())) / 864e5), el = document.getElementById('idWhen');
+    if (d >= 0 && el) { el.textContent = d === 0 ? 'Resit today · Wed 21 Oct' : `Next resit Wed 21 Oct · in ${d} day${d === 1 ? '' : 's'}`; el.hidden = false; } })();
+  </script>
 
   <div class="controls">
     <div class="seg" id="nav">
